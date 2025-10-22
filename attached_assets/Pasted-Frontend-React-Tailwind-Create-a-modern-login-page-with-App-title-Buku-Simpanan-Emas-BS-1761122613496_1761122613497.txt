@@ -1,0 +1,86 @@
+Frontend (React + Tailwind)
+
+Create a modern login page with:
+
+App title: “🕌 Buku Simpanan Emas (BSE)”
+
+Email / Password / Login button
+
+“Login as” dropdown or role buttons: Admin | Manager | Teller | Customer
+
+When a role is selected, prefill the corresponding demo user credentials (for example, admin@bse.my)
+
+Include a “Show password” toggle
+
+Display success/error alerts using React Toastify
+
+Remember-me checkbox
+
+Light/dark mode toggle
+
+Show available demo users below the form in a small card:
+
+💡 Demo Accounts:
+Admin  → admin@bse.my / Admin@123  
+Manager → manager@bse.my / Manager@123  
+Teller  → teller@bse.my / Teller@123  
+Customer → customer@bse.my / Customer@123
+
+
+Make them clickable to auto-fill the login form.
+
+On successful login, redirect to each user’s dashboard:
+
+Admin → /admin/dashboard
+
+Manager → /manager/dashboard
+
+Teller → /teller/dashboard
+
+Customer → /customer/dashboard
+
+Use Framer Motion for smooth fade-in animation on page load.
+
+⚙️ Backend (Node.js + Express + JWT)
+
+/api/auth/login verifies email/password.
+
+Fetch user role from DB (users.role) and return in the JWT payload.
+
+Example response:
+
+{
+  "message": "Login successful",
+  "token": "JWT_TOKEN",
+  "role": "teller",
+  "user": { "id": 4, "name": "Ali Teller", "email": "teller@bse.my" }
+}
+
+
+The frontend stores the token + role in context/localStorage.
+
+Middleware authorizeRoles('admin') etc. protects routes by role.
+
+🧩 Database Seed (Optional)
+
+Add demo users automatically:
+
+INSERT INTO users (name, email, password_hash, role) VALUES
+('Admin User','admin@bse.my', bcrypt('Admin@123'),'admin'),
+('Branch Manager','manager@bse.my', bcrypt('Manager@123'),'manager'),
+('Gold Teller','teller@bse.my', bcrypt('Teller@123'),'teller'),
+('Customer Ali','customer@bse.my', bcrypt('Customer@123'),'customer');
+
+🚀 Deliverables
+
+Updated login page (Login.jsx) with role selection + demo users
+
+Connected to backend JWT login API
+
+Redirects to dashboards based on role
+
+Modern UI with Tailwind + Framer Motion
+
+Works seamlessly in Replit (Vite + Express)
+
+Generate the complete working login page and backend login API, including sample demo accounts for all roles.
