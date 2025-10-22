@@ -10,8 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Lock, Eye, EyeOff, Shield } from 'lucide-react';
+import { ToastContainer, toast as toastify } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { Loader2, Mail, Lock, Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -22,14 +26,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
+const demoAccounts = [
+  { role: 'admin', email: 'admin@bse.my', password: 'Admin@123', label: 'Admin' },
+  { role: 'manager', email: 'manager@bse.my', password: 'Manager@123', label: 'Manager' },
+  { role: 'teller', email: 'teller@bse.my', password: 'Teller@123', label: 'Teller' },
+  { role: 'customer', email: 'customer@bse.my', password: 'Customer@123', label: 'Customer' },
+];
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
-  const [twoFactorMethod, setTwoFactorMethod] = useState<'app' | 'email' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>('');
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -41,41 +52,64 @@ export default function LoginPage() {
     },
   });
 
+  const handleRoleSelect = (role: string) => {
+    setSelectedRole(role);
+    const account = demoAccounts.find(acc => acc.role === role);
+    if (account) {
+      form.setValue('email', account.email);
+      form.setValue('password', account.password);
+    }
+  };
+
+  const handleDemoAccountClick = (account: typeof demoAccounts[0]) => {
+    setSelectedRole(account.role);
+    form.setValue('email', account.email);
+    form.setValue('password', account.password);
+    toastify.info(`Demo credentials loaded for ${account.label}`, {
+      position: 'top-right',
+      autoClose: 2000,
+    });
+  };
+
   async function onSubmit(data: LoginForm) {
     setIsLoading(true);
     try {
       const result = await login(data.email, data.password, data.rememberMe, data.twoFactorCode);
 
       if (result.requiresTwoFactor) {
-        setRequiresTwoFactor(true);
-        setTwoFactorMethod(result.twoFactorMethod);
         toast({
           title: 'Two-Factor Authentication Required',
-          description: `Please enter your ${result.twoFactorMethod === 'app' ? 'authenticator' : 'email'} code.`,
+          description: 'Please enter your authenticator code.',
         });
         return;
       }
 
-      toast({
-        title: 'Login Successful',
-        description: 'Welcome back!',
+      toastify.success('Login successful! Welcome back!', {
+        position: 'top-right',
+        autoClose: 3000,
       });
 
       switch (result.user.role) {
         case 'admin':
-          setLocation('/dashboard');
+          setLocation('/admin/dashboard');
           break;
         case 'manager':
-        case 'auditor':
-          setLocation('/dashboard');
+          setLocation('/manager/dashboard');
           break;
         case 'teller':
-          setLocation('/dashboard');
+          setLocation('/teller/dashboard');
+          break;
+        case 'customer':
+          setLocation('/customer/dashboard');
           break;
         default:
           setLocation('/dashboard');
       }
     } catch (error: any) {
+      toastify.error(error.message || 'Invalid credentials', {
+        position: 'top-right',
+        autoClose: 3000,
+      });
       toast({
         title: 'Login Failed',
         description: error.message || 'Invalid credentials',
@@ -87,7 +121,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
+      <ToastContainer />
+      
+      {/* Theme Toggle */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="fixed top-4 right-4 z-50"
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          data-testid="button-theme-toggle"
+          className="rounded-full bg-white dark:bg-gray-800 shadow-lg"
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-5 w-5" />
+          ) : (
+            <Moon className="h-5 w-5" />
+          )}
+        </Button>
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -100,15 +157,33 @@ export default function LoginPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mx-auto mb-4 h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center"
+              className="mx-auto mb-2 text-5xl"
             >
-              <Shield className="h-8 w-8 text-primary" />
+              🕌
             </motion.div>
-            <CardTitle className="text-3xl font-bold">Ar-Rahnu System</CardTitle>
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-teal-400">
+              Buku Simpanan Emas (BSE)
+            </CardTitle>
             <CardDescription>Enter your credentials to access your account</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              {/* Login As Selector */}
+              <div className="space-y-2">
+                <Label htmlFor="role">Login as</Label>
+                <Select value={selectedRole} onValueChange={handleRoleSelect}>
+                  <SelectTrigger id="role" data-testid="select-role">
+                    <SelectValue placeholder="Select role..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="teller">Teller</SelectItem>
+                    <SelectItem value="customer">Customer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
@@ -132,9 +207,9 @@ export default function LoginPage() {
                   <Label htmlFor="password">Password</Label>
                   <Button
                     type="button"
-                    variant="link"
+                    variant="ghost"
                     size="sm"
-                    className="px-0 text-xs"
+                    className="px-0 text-xs h-auto"
                     onClick={() => setLocation('/forgot-password')}
                     data-testid="link-forgot-password"
                   >
@@ -165,26 +240,6 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {requiresTwoFactor && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="space-y-2"
-                >
-                  <Label htmlFor="twoFactorCode">
-                    {twoFactorMethod === 'app' ? 'Authenticator Code' : 'Email Code'}
-                  </Label>
-                  <Input
-                    id="twoFactorCode"
-                    type="text"
-                    placeholder="000000"
-                    maxLength={6}
-                    data-testid="input-2fa-code"
-                    {...form.register('twoFactorCode')}
-                  />
-                </motion.div>
-              )}
-
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="rememberMe"
@@ -199,21 +254,49 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700"
                 disabled={isLoading}
                 data-testid="button-login"
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {requiresTwoFactor ? 'Verify & Login' : 'Sign In'}
+                Sign In
               </Button>
             </form>
+
+            {/* Demo Accounts Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-blue-200 dark:border-gray-600"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">💡</span>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Demo Accounts</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {demoAccounts.map((account) => (
+                  <button
+                    key={account.role}
+                    type="button"
+                    onClick={() => handleDemoAccountClick(account)}
+                    className="p-2 text-left text-xs bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
+                    data-testid={`button-demo-${account.role}`}
+                  >
+                    <div className="font-semibold text-emerald-700 dark:text-emerald-400">{account.label}</div>
+                    <div className="text-gray-600 dark:text-gray-400 truncate">{account.email}</div>
+                    <div className="text-gray-500 dark:text-gray-500">{account.password}</div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <div className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
               <Button
-                variant="link"
-                className="px-1 font-semibold"
+                variant="ghost"
+                className="px-1 font-semibold h-auto"
                 onClick={() => setLocation('/register')}
                 data-testid="link-register"
               >

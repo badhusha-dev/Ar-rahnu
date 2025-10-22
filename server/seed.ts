@@ -60,12 +60,11 @@ async function seed() {
     
     if (existingUsers.length === 0) {
       console.log("👥 Creating users...");
-      const hashedPassword = await hashPassword("password123");
       
       const createdUsers = await db.insert(users).values([
         {
-          email: "admin@bse.com",
-          password: hashedPassword,
+          email: "admin@bse.my",
+          password: await hashPassword("Admin@123"),
           firstName: "Admin",
           lastName: "User",
           phone: "+60123456789",
@@ -75,10 +74,10 @@ async function seed() {
           isActive: true,
         },
         {
-          email: "manager@bse.com",
-          password: hashedPassword,
-          firstName: "Manager",
-          lastName: "Branch",
+          email: "manager@bse.my",
+          password: await hashPassword("Manager@123"),
+          firstName: "Branch",
+          lastName: "Manager",
           phone: "+60123456790",
           role: "manager",
           branchId: branchIds[0].id,
@@ -86,10 +85,10 @@ async function seed() {
           isActive: true,
         },
         {
-          email: "teller@bse.com",
-          password: hashedPassword,
-          firstName: "Teller",
-          lastName: "Staff",
+          email: "teller@bse.my",
+          password: await hashPassword("Teller@123"),
+          firstName: "Gold",
+          lastName: "Teller",
           phone: "+60123456791",
           role: "teller",
           branchId: branchIds[0].id,
@@ -97,33 +96,11 @@ async function seed() {
           isActive: true,
         },
         {
-          email: "customer1@example.com",
-          password: hashedPassword,
-          firstName: "Ahmad",
-          lastName: "Ibrahim",
+          email: "customer@bse.my",
+          password: await hashPassword("Customer@123"),
+          firstName: "Customer",
+          lastName: "Ali",
           phone: "+60123456792",
-          role: "customer",
-          branchId: branchIds[0].id,
-          emailVerified: true,
-          isActive: true,
-        },
-        {
-          email: "customer2@example.com",
-          password: hashedPassword,
-          firstName: "Siti",
-          lastName: "Aminah",
-          phone: "+60123456793",
-          role: "customer",
-          branchId: branchIds[1].id,
-          emailVerified: true,
-          isActive: true,
-        },
-        {
-          email: "customer3@example.com",
-          password: hashedPassword,
-          firstName: "Wong",
-          lastName: "Li Hua",
-          phone: "+60123456794",
           role: "customer",
           branchId: branchIds[0].id,
           emailVerified: true,
@@ -305,14 +282,12 @@ async function seed() {
     }
 
     console.log("\n🎉 Seeding complete!");
-    console.log("\n📝 Default Credentials:");
+    console.log("\n📝 Demo Accounts - Buku Simpanan Emas (BSE):");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("Admin     : admin@bse.com / password123");
-    console.log("Manager   : manager@bse.com / password123");
-    console.log("Teller    : teller@bse.com / password123");
-    console.log("Customer 1: customer1@example.com / password123");
-    console.log("Customer 2: customer2@example.com / password123");
-    console.log("Customer 3: customer3@example.com / password123");
+    console.log("Admin    → admin@bse.my / Admin@123");
+    console.log("Manager  → manager@bse.my / Manager@123");
+    console.log("Teller   → teller@bse.my / Teller@123");
+    console.log("Customer → customer@bse.my / Customer@123");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     
   } catch (error) {

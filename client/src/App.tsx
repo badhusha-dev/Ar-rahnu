@@ -16,6 +16,10 @@ import ProfilePage from "@/pages/profile";
 import SessionsPage from "@/pages/sessions";
 import ActivityPage from "@/pages/activity";
 import Dashboard from "@/pages/dashboard";
+import AdminDashboard from "@/pages/admin-dashboard";
+import ManagerDashboard from "@/pages/manager-dashboard";
+import TellerDashboard from "@/pages/teller-dashboard";
+import CustomerDashboard from "@/pages/customer-dashboard";
 import Customers from "@/pages/customers";
 import NewCustomer from "@/pages/new-customer";
 import CustomerDetail from "@/pages/customer-detail";
@@ -72,6 +76,11 @@ function Router() {
             <div className="mx-auto max-w-7xl">
               <Switch>
                 <Route path="/" component={Dashboard} />
+                <Route path="/dashboard" component={Dashboard} />
+                <Route path="/admin/dashboard" component={AdminDashboard} />
+                <Route path="/manager/dashboard" component={ManagerDashboard} />
+                <Route path="/teller/dashboard" component={TellerDashboard} />
+                <Route path="/customer/dashboard" component={CustomerDashboard} />
                 <Route path="/profile" component={ProfilePage} />
                 <Route path="/sessions" component={SessionsPage} />
                 <Route path="/activity" component={ActivityPage} />
