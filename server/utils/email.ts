@@ -7,6 +7,10 @@ const SMTP_PASSWORD = process.env.SMTP_PASSWORD || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@arrahnu.com';
 const FROM_NAME = process.env.FROM_NAME || 'Ar-Rahnu System';
 
+// Allow self-signed certificates in development
+const isDevelopment = process.env.NODE_ENV === 'development';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = isDevelopment ? '0' : '1';
+
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
