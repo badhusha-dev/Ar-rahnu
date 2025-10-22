@@ -1,9 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertCustomerSchema, insertPawnTransactionSchema } from "@shared/schema";
+import { authService } from "./authService";
+import { authenticateToken, type AuthenticatedRequest } from "./middleware/auth";
+import { requireRole, requireAdmin, requireManagerOrAbove } from "./middleware/roleGuard";
+import { loginRateLimiter, registerRateLimiter, passwordResetRateLimiter } from "./middleware/rateLimiter";
+import { insertCustomerSchema, insertPawnTransactionSchema, insertUserSchema, loginSchema } from "@shared/schema";
 import axios from "axios";
+import { z } from "zod";
 
 // Helper to generate contract number
 function generateContractNumber(): string {
@@ -93,23 +97,204 @@ async function fetchGoldPrices() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup authentication
-  await setupAuth(app);
-
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // ============================================
+  // AUTHENTICATION ROUTES
+  // ============================================
+  
+  // Register new user
+  app.post('/api/auth/register', registerRateLimiter, async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
+      const userData = insertUserSchema.parse(req.body);
+      const result = await authService.register(userData, req);
+      res.status(201).json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Verify email
+  app.get('/api/auth/verify-email', async (req, res) => {
+    try {
+      const { token } = req.query;
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: 'Verification token required' });
+      }
+      const result = await authService.verifyEmail(token);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Login
+  app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
+    try {
+      const loginData = loginSchema.parse(req.body);
+      const result = await authService.login(loginData, req);
+      
+      if (result.refreshToken) {
+        res.cookie('refreshToken', result.refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+      }
+      
+      res.json({
+        user: result.user,
+        accessToken: result.accessToken,
+        requiresTwoFactor: result.requiresTwoFactor,
+        twoFactorMethod: result.twoFactorMethod,
+      });
+    } catch (error: any) {
+      res.status(401).json({ message: error.message });
+    }
+  });
+
+  // Refresh access token
+  app.post('/api/auth/refresh', async (req, res) => {
+    try {
+      const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+      if (!refreshToken) {
+        return res.status(401).json({ message: 'Refresh token required' });
+      }
+      
+      const result = await authService.refreshAccessToken(refreshToken);
+      
+      res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      
+      res.json({ accessToken: result.accessToken });
+    } catch (error: any) {
+      res.status(401).json({ message: error.message });
+    }
+  });
+
+  // Logout
+  app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+      const result = await authService.logout(req.user!.userId, refreshToken);
+      res.clearCookie('refreshToken');
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Logout from all sessions
+  app.post('/api/auth/logout-all', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const result = await authService.logoutAllSessions(req.user!.userId);
+      res.clearCookie('refreshToken');
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Request password reset
+  app.post('/api/auth/forgot-password', passwordResetRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: 'Email required' });
+      }
+      const result = await authService.requestPasswordReset(email);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Reset password
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ message: 'Token and password required' });
+      }
+      const result = await authService.resetPassword(token, password);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Setup 2FA
+  app.post('/api/auth/2fa/setup', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const result = await authService.setupTwoFactor(req.user!.userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Enable 2FA
+  app.post('/api/auth/2fa/enable', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ message: 'Verification token required' });
+      }
+      const result = await authService.enableTwoFactor(req.user!.userId, token);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Disable 2FA
+  app.post('/api/auth/2fa/disable', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ message: 'Password required' });
+      }
+      const result = await authService.disableTwoFactor(req.user!.userId, password);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Get current user
+  app.get('/api/auth/user', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      const { password, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
 
+  // Get user sessions/login history
+  app.get('/api/auth/sessions', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const sessions = await authService.getUserSessions(req.user!.userId);
+      res.json(sessions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================
+  // BUSINESS LOGIC ROUTES
+  // ============================================
+  
   // Customer routes
-  app.get('/api/customers', isAuthenticated, async (req, res) => {
+  app.get('/api/customers', authenticateToken, async (req, res) => {
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
@@ -119,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/customers/:id', isAuthenticated, async (req, res) => {
+  app.get('/api/customers/:id', authenticateToken, async (req, res) => {
     try {
       const customer = await storage.getCustomer(req.params.id);
       if (!customer) {
@@ -132,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/customers/:id/loans', isAuthenticated, async (req, res) => {
+  app.get('/api/customers/:id/loans', authenticateToken, async (req, res) => {
     try {
       const transactions = await storage.getPawnTransactions();
       const customerLoans = transactions.filter(t => t.customerId === req.params.id);
@@ -143,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/customers', isAuthenticated, async (req, res) => {
+  app.post('/api/customers', authenticateToken, async (req, res) => {
     try {
       const validated = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(validated);
@@ -155,7 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Branch routes
-  app.get('/api/branches', isAuthenticated, async (req, res) => {
+  app.get('/api/branches', authenticateToken, async (req, res) => {
     try {
       const branches = await storage.getBranches();
       res.json(branches);
@@ -166,7 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Gold price routes
-  app.get('/api/gold-prices', isAuthenticated, async (req, res) => {
+  app.get('/api/gold-prices', authenticateToken, async (req, res) => {
     try {
       const priceData = await fetchGoldPrices();
       res.json(priceData);
@@ -177,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Pawn transaction routes
-  app.get('/api/loans', isAuthenticated, async (req, res) => {
+  app.get('/api/loans', authenticateToken, async (req, res) => {
     try {
       const transactions = await storage.getPawnTransactions();
       const customers = await storage.getCustomers();
@@ -205,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
+  app.post('/api/transactions', authenticateToken, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const data = req.body;
@@ -273,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vault routes
-  app.get('/api/vault', isAuthenticated, async (req, res) => {
+  app.get('/api/vault', authenticateToken, async (req, res) => {
     try {
       const vaultItems = await storage.getVaultItems();
       const transactions = await storage.getPawnTransactions();
@@ -305,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Renewal routes
-  app.get('/api/renewals', isAuthenticated, async (req, res) => {
+  app.get('/api/renewals', authenticateToken, async (req, res) => {
     try {
       const renewals = await storage.getRenewals();
       const transactions = await storage.getPawnTransactions();
@@ -334,7 +519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard stats route
-  app.get('/api/dashboard/stats', isAuthenticated, async (req, res) => {
+  app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
@@ -344,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/dashboard/recent-transactions', isAuthenticated, async (req, res) => {
+  app.get('/api/dashboard/recent-transactions', authenticateToken, async (req, res) => {
     try {
       const transactions = await storage.getPawnTransactions();
       const customers = await storage.getCustomers();

@@ -25,27 +25,82 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table (required for Replit Auth)
+// User storage table with comprehensive authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
+  email: varchar("email", { length: 255 }).unique().notNull(),
+  password: varchar("password", { length: 255 }).notNull(),
+  firstName: varchar("first_name", { length: 255 }),
+  lastName: varchar("last_name", { length: 255 }),
+  profileImageUrl: varchar("profile_image_url", { length: 500 }),
   role: varchar("role", { enum: ["teller", "manager", "auditor", "admin"] }).notNull().default("teller"),
   branchId: varchar("branch_id"),
   isActive: boolean("is_active").notNull().default(true),
+  
+  // Email verification
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: varchar("email_verification_token", { length: 255 }),
+  emailVerificationExpiry: timestamp("email_verification_expiry"),
+  
+  // Password reset
+  passwordResetToken: varchar("password_reset_token", { length: 255 }),
+  passwordResetExpiry: timestamp("password_reset_expiry"),
+  
+  // Two-Factor Authentication
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  twoFactorSecret: varchar("two_factor_secret", { length: 255 }),
+  
+  // Account security
+  loginAttempts: integer("login_attempts").notNull().default(0),
+  accountLockedUntil: timestamp("account_locked_until"),
+  
+  // Last login tracking
+  lastLoginAt: timestamp("last_login_at"),
+  lastLoginIp: varchar("last_login_ip", { length: 100 }),
+  lastLoginDevice: varchar("last_login_device", { length: 500 }),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const userRelations = relations(users, ({ one }) => ({
+export const userRelations = relations(users, ({ one, many }) => ({
   branch: one(branches, {
     fields: [users.branchId],
     references: [branches.id],
   }),
+  refreshTokens: many(refreshTokens),
+  loginHistory: many(loginHistory),
 }));
 
+export const insertUserSchema = createInsertSchema(users, {
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  emailVerificationToken: true,
+  emailVerificationExpiry: true,
+  passwordResetToken: true,
+  passwordResetExpiry: true,
+  twoFactorSecret: true,
+  loginAttempts: true,
+  accountLockedUntil: true,
+  lastLoginAt: true,
+  lastLoginIp: true,
+  lastLoginDevice: true,
+  emailVerified: true,
+});
+
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean().optional(),
+  twoFactorCode: z.string().optional(),
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type LoginData = z.infer<typeof loginSchema>;
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
@@ -358,3 +413,61 @@ export const insertVaultMovementSchema = createInsertSchema(vaultMovements).omit
 
 export type InsertVaultMovement = z.infer<typeof insertVaultMovementSchema>;
 export type VaultMovement = typeof vaultMovements.$inferSelect;
+
+// Refresh Tokens table (for JWT refresh token management)
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  token: varchar("token", { length: 500 }).notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  ipAddress: varchar("ip_address", { length: 100 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+});
+
+export const refreshTokenRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, {
+    fields: [refreshTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertRefreshTokenSchema = createInsertSchema(refreshTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+
+// Login History table (activity tracking and audit)
+export const loginHistory = pgTable("login_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  loginAt: timestamp("login_at").notNull().defaultNow(),
+  ipAddress: varchar("ip_address", { length: 100 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  device: varchar("device", { length: 255 }),
+  browser: varchar("browser", { length: 255 }),
+  os: varchar("os", { length: 255 }),
+  country: varchar("country", { length: 100 }),
+  city: varchar("city", { length: 100 }),
+  success: boolean("success").notNull().default(true),
+  failureReason: varchar("failure_reason", { length: 255 }),
+  twoFactorUsed: boolean("two_factor_used").notNull().default(false),
+});
+
+export const loginHistoryRelations = relations(loginHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [loginHistory.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
+  id: true,
+  loginAt: true,
+});
+
+export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
+export type LoginHistory = typeof loginHistory.$inferSelect;

@@ -6,8 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useAuth } from "@/hooks/useAuth";
-import Landing from "@/pages/landing";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import LoginPage from "@/pages/login";
+import RegisterPage from "@/pages/register";
 import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import NewCustomer from "@/pages/new-customer";
@@ -23,11 +24,23 @@ import NotFound from "@/pages/not-found";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading || !isAuthenticated) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/" component={Landing} />
-        <Route component={Landing} />
+        <Route path="/login" component={LoginPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route component={LoginPage} />
       </Switch>
     );
   }
@@ -72,10 +85,12 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

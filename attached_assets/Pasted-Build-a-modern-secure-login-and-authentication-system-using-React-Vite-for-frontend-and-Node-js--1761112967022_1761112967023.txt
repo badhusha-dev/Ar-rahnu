@@ -1,0 +1,128 @@
+Build a modern secure login and authentication system using React (Vite) for frontend and Node.js + Express + PostgreSQL for backend.
+Include the following features and requirements:
+
+🔐 Authentication Features
+
+User Registration & Login
+
+Register with name, email, password.
+
+Validate email format and password strength.
+
+Hash passwords with bcrypt.
+
+On login, issue JWT tokens (access + refresh).
+
+“Remember me” option using refresh token cookie (HttpOnly).
+
+2FA (Two-Factor Authentication)
+
+Optional 2FA setup using Google Authenticator or email OTP.
+
+Store secret key or OTP expiry securely.
+
+Verify on login if enabled.
+
+Forgot / Reset Password
+
+Generate password reset link or OTP sent to email.
+
+Expire reset tokens after 10 minutes.
+
+Validate before allowing password update.
+
+Account Lock & Brute Force Protection
+
+Track failed login attempts.
+
+Lock account after 5 consecutive failures for 15 minutes.
+
+Log attempts for audit.
+
+👥 User Roles & Access Control
+
+Implement RBAC (Role-Based Access Control): Admin, Staff, and User.
+
+Middleware to restrict access to certain routes based on roles.
+
+Store roles in users table.
+
+🧾 Activity & Session Management
+
+Track login timestamp, IP, and device (User-Agent).
+
+Add /api/user/sessions endpoint to view active sessions.
+
+Allow logout from all sessions.
+
+Auto-expire refresh tokens after 7 days.
+
+🎨 Frontend (React + Tailwind)
+
+Modern responsive login/register/forgot password pages.
+
+Use Framer Motion for smooth animations.
+
+Add dark/light mode toggle.
+
+Remember-me checkbox and loading state.
+
+Success/error toasts using React Toastify.
+
+After login, redirect based on role:
+
+/admin/dashboard
+
+/staff/panel
+
+/user/profile
+
+🧠 Bonus Features
+
+Email verification after signup.
+
+Google & GitHub OAuth login.
+
+“Device trusted” notification (new device login alert).
+
+ReCAPTCHA validation on login page.
+
+Environment variables for secrets (.env for keys and DB).
+
+📂 Project Structure
+backend/
+  ├── src/
+  │   ├── routes/
+  │   ├── controllers/
+  │   ├── models/
+  │   ├── middleware/
+  │   ├── utils/
+  │   └── server.js
+  └── .env
+frontend/
+  ├── src/
+  │   ├── pages/Login.jsx
+  │   ├── pages/Register.jsx
+  │   ├── components/AuthForm.jsx
+  │   └── context/AuthContext.jsx
+  └── vite.config.js
+
+⚙️ Tech Stack
+
+Backend: Node.js, Express, PostgreSQL, Prisma ORM, bcrypt, JWT, Nodemailer, Speakeasy (2FA)
+
+Frontend: React (Vite), TailwindCSS, Axios, Framer Motion, React Router
+
+🧩 Deliverables
+
+Fully working login + registration flow.
+
+2FA enabled user security.
+
+Role-based route protection.
+
+Activity log endpoints.
+
+.env.example and README with setup steps.
+
+Generate the full working code with comments and modular file structure.

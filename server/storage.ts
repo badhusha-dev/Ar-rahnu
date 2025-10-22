@@ -8,8 +8,11 @@ import {
   vaultItems,
   vaultMovements,
   branches,
+  refreshTokens,
+  loginHistory,
   type User,
   type UpsertUser,
+  type InsertUser,
   type Customer,
   type InsertCustomer,
   type GoldItem,
@@ -26,14 +29,34 @@ import {
   type InsertVaultMovement,
   type Branch,
   type InsertBranch,
+  type RefreshToken,
+  type InsertRefreshToken,
+  type LoginHistory,
+  type InsertLoginHistory,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lt } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations (required for Replit Auth)
+  // User operations
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
+  getUserByPasswordResetToken(token: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, data: Partial<User>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
+  
+  // Refresh token operations
+  createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken>;
+  getRefreshToken(token: string): Promise<RefreshToken | undefined>;
+  deleteRefreshToken(token: string): Promise<void>;
+  deleteUserRefreshTokens(userId: string): Promise<void>;
+  cleanupExpiredTokens(): Promise<void>;
+  
+  // Login history operations
+  createLoginHistory(history: InsertLoginHistory): Promise<LoginHistory>;
+  getUserLoginHistory(userId: string, limit?: number): Promise<LoginHistory[]>;
   
   // Customer operations
   getCustomers(): Promise<Customer[]>;
@@ -82,6 +105,35 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.emailVerificationToken, token));
+    return user;
+  }
+
+  async getUserByPasswordResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.passwordResetToken, token));
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [created] = await db.insert(users).values(user).returning();
+    return created;
+  }
+
+  async updateUser(id: string, data: Partial<User>): Promise<User> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -95,6 +147,48 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  // Refresh token operations
+  async createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken> {
+    const [created] = await db.insert(refreshTokens).values(token).returning();
+    return created;
+  }
+
+  async getRefreshToken(token: string): Promise<RefreshToken | undefined> {
+    const [refreshToken] = await db
+      .select()
+      .from(refreshTokens)
+      .where(eq(refreshTokens.token, token));
+    return refreshToken;
+  }
+
+  async deleteRefreshToken(token: string): Promise<void> {
+    await db.delete(refreshTokens).where(eq(refreshTokens.token, token));
+  }
+
+  async deleteUserRefreshTokens(userId: string): Promise<void> {
+    await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+  }
+
+  async cleanupExpiredTokens(): Promise<void> {
+    const now = new Date();
+    await db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, now));
+  }
+
+  // Login history operations
+  async createLoginHistory(history: InsertLoginHistory): Promise<LoginHistory> {
+    const [created] = await db.insert(loginHistory).values(history).returning();
+    return created;
+  }
+
+  async getUserLoginHistory(userId: string, limit: number = 20): Promise<LoginHistory[]> {
+    return await db
+      .select()
+      .from(loginHistory)
+      .where(eq(loginHistory.userId, userId))
+      .orderBy(desc(loginHistory.loginAt))
+      .limit(limit);
   }
 
   // Customer operations
