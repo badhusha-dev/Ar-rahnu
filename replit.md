@@ -1,10 +1,10 @@
-# Ar-Rahnu Islamic Pawn Broking System
+# Buku Simpanan Emas (BSE) - Gold Savings & Trading System
 
 ## Overview
 
-The Ar-Rahnu Islamic Pawn Broking System is a comprehensive web application for managing Shariah-compliant pawn broking operations. The system enables Islamic financial institutions to provide interest-free loans (Qard Hasan) secured by gold collateral (Rahn), while charging only safekeeping fees (Ujrah) in accordance with Islamic principles.
+The Buku Simpanan Emas (BSE) system is a comprehensive Shariah-compliant web application for managing digital gold savings and trading operations. The system enables Islamic financial institutions to provide customers with a platform to buy, sell, and store gold digitally while maintaining full compliance with Islamic financial principles.
 
-The application handles the complete lifecycle of pawn broking operations including customer registration, gold valuation, loan processing, vault inventory management, contract renewals, and financial reporting across multiple branch locations.
+The application handles the complete lifecycle of gold trading operations including customer registration, gold buying and selling, vault inventory management, supplier tracking, and financial reporting across multiple branch locations.
 
 ## User Preferences
 
@@ -30,6 +30,16 @@ Preferred communication style: Simple, everyday language.
 - **Sessions** (`/sessions`) - Active device/session management with logout capabilities
 - **Activity** (`/activity`) - Login history audit log with success/failure filtering
 
+**BSE Frontend Pages** (To be implemented):
+- `/dashboard` - Role-based dashboard (customer wallet view, teller operations, manager reports, admin controls)
+- `/wallet` - Customer gold wallet with buy/sell functionality
+- `/transactions` - Transaction history
+- `/admin/users` - User management
+- `/admin/inventory` - Physical gold inventory management
+- `/admin/suppliers` - Supplier management
+- `/manager/reports` - Branch performance reports
+- `/teller/transactions` - Create customer transactions
+
 **UI Component Library**: shadcn/ui components built on Radix UI primitives, styled with Tailwind CSS. The design system follows Material Design principles with Islamic cultural customization (green/gold color palette).
 
 **Forms**: React Hook Form with Zod schema validation for type-safe form handling and validation.
@@ -50,20 +60,22 @@ Preferred communication style: Simple, everyday language.
 - Session tracking with device fingerprinting (User-Agent parsing, IP address logging)
 
 **Authorization**: Role-based access control (RBAC) with four roles:
-- Teller (basic operations)
-- Manager (branch-level oversight)
-- Auditor (read-only financial access)
-- Admin (full system access)
+- **Customer**: Can buy/sell gold, view wallet balance, view transaction history
+- **Teller**: All customer permissions + execute customer transactions, view branch inventory
+- **Manager**: All teller permissions + approve large transactions, view branch reports, manage tellers
+- **Admin**: Full system access including user management, inventory management, supplier management, gold price updates
 
 Middleware guards enforce hierarchical permissions where higher roles inherit lower role permissions.
 
 **Security Features**:
+- Server-side price calculation to prevent client-side price manipulation
+- Role-based guards on all management endpoints (requireRole, requireManagerOrAbove, requireAdmin)
 - Rate limiting on authentication endpoints (login, register, password reset)
 - Account lockout after 5 failed login attempts
 - Email verification for new accounts
 - Password reset with expiring tokens (10 minutes)
 - Brute force protection with IP-based rate limiting
-- Audit logging for all authentication events
+- Comprehensive audit logging for all authentication and trading events
 
 **API Design**: RESTful endpoints with consistent error handling. All API routes are prefixed with `/api/`.
 
@@ -76,22 +88,48 @@ Middleware guards enforce hierarchical permissions where higher roles inherit lo
 
 **ORM**: Drizzle ORM provides type-safe database queries with zero runtime overhead. Migrations are stored in `/migrations` directory.
 
-**Core Tables**:
-- **users** - User accounts with authentication fields (email, password hash, 2FA settings, email verification)
-- **customers** - Customer profiles with IC numbers, contact information
+**Core BSE Tables**:
+- **users** - User accounts with authentication fields (email, password hash, 2FA settings, email verification, role assignment)
 - **branches** - Multi-location support with branch codes, managers
-- **pawnTransactions** - Core loan records with contract numbers, amounts, dates
-- **goldItems** - Pledged gold details (karat, weight, description)
-- **vaultItems** - Physical inventory tracking with barcode/RFID support
-- **payments** - Payment history for loan transactions
-- **renewals** - Contract extension records
+- **goldAccounts** - Customer digital gold wallets with balance tracking
+- **goldTransactions** - Buy/sell transaction records with price locking and payment tracking
+- **goldPrices** - Historical gold pricing by karat with buy/sell spreads
+- **inventory** - Physical gold stock tracking (bars, coins, jewelry, wafers) with serial numbers
+- **suppliers** - Gold supplier management with contact and banking details
+- **supplierInvoices** - Supplier invoice tracking
 - **refreshTokens** - Persistent refresh token storage
 - **loginHistory** - Audit trail of all login attempts
 - **sessions** - Session storage for Replit Auth (required by platform)
+- **auditLogs** - System-wide activity tracking for compliance
 
 **Relationships**: The schema uses foreign key constraints with Drizzle relations API for type-safe joins. Primary keys use UUID generation via PostgreSQL's `gen_random_uuid()`.
 
-**Indexes**: Strategic indexes are placed on frequently queried fields (email lookups, contract number searches, customer IC numbers).
+**Indexes**: Strategic indexes are placed on frequently queried fields (email lookups, transaction numbers, user IDs).
+
+### BSE API Endpoints
+
+**Gold Trading (Customer)**:
+- `GET /api/gold-prices` - Get current gold prices by karat
+- `GET /api/gold-account` - Get user's gold wallet balance
+- `GET /api/gold-transactions` - Get user's transaction history
+- `POST /api/gold/buy` - Buy gold (server-computed pricing)
+- `POST /api/gold/sell` - Sell gold (server-computed pricing)
+
+**Management (Admin/Manager)**:
+- `GET /api/users` - Get all users (admin only)
+- `GET /api/transactions` - Get all transactions (teller+)
+- `PATCH /api/transactions/:id/approve` - Approve transaction (manager+)
+- `GET /api/branches` - Get all branches
+- `POST /api/branches` - Create branch (admin)
+- `GET /api/inventory` - Get inventory items (teller+)
+- `POST /api/inventory` - Add inventory item (manager+)
+- `GET /api/suppliers` - Get suppliers (manager+)
+- `POST /api/suppliers` - Create supplier (manager+)
+- `POST /api/gold-prices` - Update gold prices (admin)
+- `GET /api/audit-logs` - Get audit logs (admin)
+
+**Reports & Analytics**:
+- `GET /api/dashboard/stats` - Dashboard statistics
 
 ### External Dependencies
 
@@ -130,3 +168,89 @@ Middleware guards enforce hierarchical permissions where higher roles inherit lo
 - esbuild for backend bundling in production
 - tsx for TypeScript execution in development
 - Tailwind CSS with PostCSS for styling
+
+## Gold Pricing System
+
+The BSE system uses a dual-price model (buy/sell spread) to ensure profitability while maintaining Shariah compliance:
+
+**Supported Karats**: 999 (24K), 916 (22K), 900 (21.6K), 875 (21K), 750 (18K), 585 (14K)
+
+**Current Development Prices**:
+- 999: Buy RM336.53/g | Sell RM304.48/g
+- 916: Buy RM308.26/g | Sell RM278.90/g
+- 900: Buy RM302.87/g | Sell RM274.03/g
+- 875: Buy RM294.46/g | Sell RM266.42/g
+- 750: Buy RM252.40/g | Sell RM228.36/g
+- 585: Buy RM196.86/g | Sell RM178.12/g
+
+**Live Integration**: Configure `GOLD_API_KEY` to use Metals-API for real-time pricing updates.
+
+## Shariah Compliance
+
+The BSE system follows Islamic trading principles:
+
+**Bai' al-Sarf** (Gold Trading):
+- Spot transactions only (no futures/options)
+- Instant settlement and ownership transfer
+- No interest-bearing loans
+- Transparent pricing with clear buy/sell spreads
+- Fair exchange rates based on market prices
+
+**Wadiah** (Safekeeping):
+- Secure storage of physical gold inventory
+- Customer retains ownership of their gold holdings
+- No mixing of customer assets
+- Insurance and vault management
+
+## Current Status (October 2025)
+
+**Backend Transformation: ✅ COMPLETED**
+- Database schema migrated from Ar-Rahnu (pawn broking) to BSE (gold trading)
+- All REST API endpoints implemented and secured
+- Server-side price calculation prevents client manipulation
+- Role-based access control enforced on all endpoints
+- Seed data populated (branches, gold prices)
+- Running successfully on port 5000
+
+**Frontend Status: ⚠️ NEEDS UPDATING**
+- Authentication pages still functional
+- Old pawn broking pages need replacement with BSE pages
+- Need to remove references to `insertCustomerSchema` and other pawn broking schema
+- Need to create BSE-specific pages (wallet, trading, inventory, reports)
+
+**Security Enhancements Applied**:
+- Fixed temporal dead zone error by moving relations to end of schema file
+- Buy/sell endpoints only accept grams from client; all pricing computed server-side
+- UserId derived from JWT token only; clients cannot specify userId
+- Management endpoints protected with proper role guards (teller+, manager+, admin)
+- Payment method validation added
+
+## Next Steps
+
+1. **Update Frontend Pages**:
+   - Remove old pawn broking pages
+   - Create customer wallet/trading pages
+   - Create teller transaction interface
+   - Create manager reports dashboard
+   - Create admin management pages
+
+2. **Payment Integration**:
+   - Integrate FPX payment gateway
+   - Add DuitNow QR support
+   - Implement credit/debit card processing
+
+3. **Additional Features**:
+   - Physical gold delivery requests
+   - Zakat auto-calculation
+   - Gold accumulation plans (auto-buy)
+   - Mobile app (React Native)
+   - Multi-language support (EN/BM/AR)
+
+## Recent Changes (October 22, 2025)
+
+- ✅ Transformed database schema from Ar-Rahnu to BSE
+- ✅ Created gold trading APIs with server-side security
+- ✅ Fixed critical security vulnerabilities
+- ✅ Added role-based access control to all endpoints
+- ✅ Populated database with initial seed data
+- ✅ Created comprehensive system documentation (BSE_SYSTEM_README.md)
