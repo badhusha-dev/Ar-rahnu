@@ -1,0 +1,199 @@
+Build a Shariah-compliant Gold Savings & Trading System named Buku Simpanan Emas (BSE) — a full-stack web application using:
+
+Frontend: React (Vite) + TailwindCSS + Redux Toolkit + Axios + React Router
+
+Backend: Node.js + Express + PostgreSQL + Prisma ORM + JWT Authentication + TypeScript (optional)
+
+🌐 System Summary
+
+Buku Simpanan Emas (BSE) is a digital gold savings and trading system allowing customers to:
+
+Buy, sell, and store digital or physical gold
+
+Manage balances, transactions, and vault storage
+
+Maintain full Shariah compliance (Bai’ al-Sarf, Wadiah, Qard)
+
+👥 User Roles & Permissions Integration
+
+Create 4 system roles, each with dedicated access scope:
+
+Role	Description	Access Level
+Admin	System owner with full access	Manage users, gold price, inventory, audit logs, financial reports
+Manager	Branch-level supervisor	Approve transactions, manage tellers, view reports
+Teller	Frontline staff	Execute customer transactions, receive payments, issue receipts
+Customer	End user	View balance, buy/sell gold, download receipts
+Features per Role
+
+Admin Portal:
+
+Manage all users and branches
+
+Add/edit roles and permissions
+
+Adjust gold buy/sell price margins
+
+Approve supplier invoices
+
+View Shariah and accounting reports
+
+Manager Portal:
+
+View all teller transactions under branch
+
+Approve refunds and large gold purchases
+
+View performance analytics
+
+Teller Dashboard:
+
+Search customers
+
+Create buy/sell transactions
+
+Print Bai’ al-Sarf receipt
+
+Record payments (cash, FPX, DuitNow, card)
+
+Customer Portal:
+
+Login via OTP or email/password
+
+View digital gold wallet balance (grams + RM equivalent)
+
+Buy/sell instantly with live price lock
+
+Download Shariah-compliant receipts
+
+Request physical delivery
+
+🧩 Modules
+1️⃣ Authentication & Role Management
+
+User registration with email, phone, password
+
+Role assignment: admin, manager, teller, customer
+
+JWT-based authentication with refresh tokens
+
+Middleware: authorizeRoles('admin'), etc.
+
+Password hashing (bcrypt)
+
+OTP or email verification (Nodemailer or Twilio)
+
+2️⃣ Gold Trading Module
+
+Buy/Sell by RM or grams
+
+Lock price at trade time
+
+Integrate live gold price API
+
+Update user wallet + vault inventory
+
+Generate Bai’ al-Sarf contract PDF
+
+3️⃣ Inventory Management
+
+Manage physical stock (bars, coins, jewelry)
+
+Track vault vs branch stock
+
+Manage supplier invoices and payments
+
+RFID/Barcode ready structure
+
+4️⃣ Financial & Accounting
+
+Auto journal entries for all gold transactions
+
+Ledger: Cash, Inventory, Payables
+
+Profit/loss on spread report
+
+Zakat and Shariah audit logs
+
+5️⃣ Payment Integration
+
+Payment via FPX, DuitNow, or card (ToyyibPay / iPay88)
+
+Record payment entries
+
+Generate receipt and invoice PDF
+
+6️⃣ Reports & Analytics
+
+Daily gold sold/bought summary
+
+Customer holdings overview
+
+Vault stock levels
+
+Transaction logs with audit history
+
+🗄️ Database Schema (Prisma or SQL)
+users(id, name, email, phone, password_hash, role, branch_id, verified, created_at)
+branches(id, name, location)
+gold_accounts(id, user_id, balance_grams, balance_rm)
+transactions(id, user_id, type, grams, rate, total_rm, payment_method, status, created_at)
+inventory(id, serial_no, karat, weight, location, status)
+suppliers(id, name, contact, invoice_no, total_rm)
+payments(id, txn_id, method, ref_no, amount, created_at)
+audit_logs(id, user_id, action, timestamp, ip)
+
+🎨 Frontend Pages
+
+/login – Login/OTP
+
+/register – KYC registration
+
+/dashboard – Role-based dynamic dashboard
+
+/admin/users – Manage all users
+
+/admin/inventory – Manage gold stock
+
+/manager/transactions – Approve or view branch transactions
+
+/teller/sell – Create new sell order
+
+/customer/wallet – View gold balance and buy/sell history
+
+🔒 Security
+
+JWT access + refresh tokens
+
+Password hashing (bcrypt)
+
+Role-based authorization middleware
+
+CSRF + XSS protection
+
+HTTPS-ready configuration
+
+📊 Deliverables
+
+Fully functional multi-role authentication system
+
+CRUD APIs for all entities
+
+Modular backend routes: /api/auth, /api/trade, /api/inventory, /api/reports
+
+React frontend with protected routes per role
+
+Dummy seed data for testing (Admin, Teller, Manager, Customer accounts)
+
+.env.example and full README for setup
+
+🚀 Bonus Add-ons
+
+Add dark/light mode switch in dashboard
+
+Add activity logs for every login/logout
+
+Add AI assistant to recommend gold savings plans
+
+Multi-language (EN / BM / AR) support
+
+Generate the entire project structure and initial implementation, with clearly commented backend routes, database schema, and role-based frontend pages.

@@ -5,41 +5,57 @@ import { authService } from "./authService";
 import { authenticateToken, type AuthenticatedRequest } from "./middleware/auth";
 import { requireRole, requireAdmin, requireManagerOrAbove } from "./middleware/roleGuard";
 import { loginRateLimiter, registerRateLimiter, passwordResetRateLimiter } from "./middleware/rateLimiter";
-import { insertCustomerSchema, insertPawnTransactionSchema, insertUserSchema, loginSchema } from "@shared/schema";
+import { 
+  insertUserSchema, 
+  loginSchema,
+  insertGoldAccountSchema,
+  insertGoldTransactionSchema,
+  insertInventorySchema,
+  insertSupplierSchema,
+  insertGoldPriceSchema,
+  insertBranchSchema
+} from "@shared/schema";
 import axios from "axios";
 import { z } from "zod";
 
-// Helper to generate contract number
-function generateContractNumber(): string {
+// Helper to generate transaction number
+function generateTransactionNumber(): string {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-  return `ARN${year}${month}${random}`;
+  return `BSE${year}${month}${random}`;
 }
 
-// Helper to fetch gold prices
-async function fetchGoldPrices() {
+// Helper to fetch gold prices with margin
+async function fetchGoldPricesWithMargin() {
   const apiKey = process.env.GOLD_API_KEY;
+  const marginPercentage = 5; // 5% margin for buy/sell spread
   
   if (!apiKey) {
     // Return simulated prices for development
+    const basePrices = [
+      { karat: "999", basePriceMyr: 320.50 },
+      { karat: "916", basePriceMyr: 293.58 },
+      { karat: "900", basePriceMyr: 288.45 },
+      { karat: "875", basePriceMyr: 280.44 },
+      { karat: "750", basePriceMyr: 240.38 },
+      { karat: "585", basePriceMyr: 187.49 },
+    ];
+    
     return {
-      prices: [
-        { karat: "999", pricePerGramMyr: 320.50, pricePerOunceMyr: 9968.35 },
-        { karat: "916", pricePerGramMyr: 293.58, pricePerOunceMyr: 9130.12 },
-        { karat: "900", pricePerGramMyr: 288.45, pricePerOunceMyr: 8970.23 },
-        { karat: "875", pricePerGramMyr: 280.44, pricePerOunceMyr: 8721.05 },
-        { karat: "750", pricePerGramMyr: 240.38, pricePerOunceMyr: 7476.14 },
-        { karat: "585", pricePerGramMyr: 187.49, pricePerOunceMyr: 5831.98 },
-      ],
+      prices: basePrices.map(({ karat, basePriceMyr }) => ({
+        karat,
+        buyPricePerGramMyr: +(basePriceMyr * (1 + marginPercentage / 100)).toFixed(2),
+        sellPricePerGramMyr: +(basePriceMyr * (1 - marginPercentage / 100)).toFixed(2),
+        marginPercentage,
+      })),
       timestamp: new Date().toISOString(),
       source: "Simulated (Development)",
     };
   }
 
   try {
-    // Use Metals-API or similar service
     const response = await axios.get(`https://metals-api.com/api/latest`, {
       params: {
         access_key: apiKey,
@@ -52,12 +68,10 @@ async function fetchGoldPrices() {
       throw new Error("Invalid API response");
     }
 
-    // Convert to grams (API returns per troy ounce)
     const xauPricePerOunce = 1 / response.data.rates.XAU;
     const gramsPerOunce = 31.1035;
     const price24k = xauPricePerOunce / gramsPerOunce;
 
-    // Calculate prices for different karats
     const karatPurities: Record<string, number> = {
       "999": 0.999,
       "916": 0.916,
@@ -67,11 +81,15 @@ async function fetchGoldPrices() {
       "585": 0.585,
     };
 
-    const prices = Object.entries(karatPurities).map(([karat, purity]) => ({
-      karat,
-      pricePerGramMyr: price24k * purity,
-      pricePerOunceMyr: xauPricePerOunce * purity,
-    }));
+    const prices = Object.entries(karatPurities).map(([karat, purity]) => {
+      const basePrice = price24k * purity;
+      return {
+        karat,
+        buyPricePerGramMyr: +(basePrice * (1 + marginPercentage / 100)).toFixed(2),
+        sellPricePerGramMyr: +(basePrice * (1 - marginPercentage / 100)).toFixed(2),
+        marginPercentage,
+      };
+    });
 
     return {
       prices,
@@ -80,16 +98,22 @@ async function fetchGoldPrices() {
     };
   } catch (error) {
     console.error("Error fetching gold prices:", error);
-    // Fallback to simulated prices
+    const basePrices = [
+      { karat: "999", basePriceMyr: 320.50 },
+      { karat: "916", basePriceMyr: 293.58 },
+      { karat: "900", basePriceMyr: 288.45 },
+      { karat: "875", basePriceMyr: 280.44 },
+      { karat: "750", basePriceMyr: 240.38 },
+      { karat: "585", basePriceMyr: 187.49 },
+    ];
+    
     return {
-      prices: [
-        { karat: "999", pricePerGramMyr: 320.50, pricePerOunceMyr: 9968.35 },
-        { karat: "916", pricePerGramMyr: 293.58, pricePerOunceMyr: 9130.12 },
-        { karat: "900", pricePerGramMyr: 288.45, pricePerOunceMyr: 8970.23 },
-        { karat: "875", pricePerGramMyr: 280.44, pricePerOunceMyr: 8721.05 },
-        { karat: "750", pricePerGramMyr: 240.38, pricePerOunceMyr: 7476.14 },
-        { karat: "585", pricePerGramMyr: 187.49, pricePerOunceMyr: 5831.98 },
-      ],
+      prices: basePrices.map(({ karat, basePriceMyr }) => ({
+        karat,
+        buyPricePerGramMyr: +(basePriceMyr * (1 + marginPercentage / 100)).toFixed(2),
+        sellPricePerGramMyr: +(basePriceMyr * (1 - marginPercentage / 100)).toFixed(2),
+        marginPercentage,
+      })),
       timestamp: new Date().toISOString(),
       source: "Simulated (Fallback)",
     };
@@ -101,18 +125,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // AUTHENTICATION ROUTES
   // ============================================
   
-  // Register new user
   app.post('/api/auth/register', registerRateLimiter, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const result = await authService.register(userData, req);
+      
+      // Create gold account for customer role
+      if (userData.role === 'customer') {
+        await storage.createGoldAccount({
+          userId: result.user.id,
+          balanceGrams: "0",
+          balanceMyr: "0",
+          totalBoughtGrams: "0",
+          totalSoldGrams: "0",
+        });
+      }
+      
       res.status(201).json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
   });
 
-  // Verify email
   app.get('/api/auth/verify-email', async (req, res) => {
     try {
       const { token } = req.query;
@@ -126,7 +160,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Login
   app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     try {
       const loginData = loginSchema.parse(req.body);
@@ -152,7 +185,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Refresh access token
   app.post('/api/auth/refresh', async (req, res) => {
     try {
       const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
@@ -175,7 +207,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Logout
   app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
@@ -187,7 +218,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Logout from all sessions
   app.post('/api/auth/logout-all', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const result = await authService.logoutAllSessions(req.user!.userId);
@@ -198,7 +228,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Request password reset
   app.post('/api/auth/forgot-password', passwordResetRateLimiter, async (req, res) => {
     try {
       const { email } = req.body;
@@ -212,7 +241,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reset password
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
       const { token, password, newPassword } = req.body;
@@ -227,7 +255,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Change password (for logged-in users)
   app.post('/api/auth/change-password', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
@@ -240,8 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      const { verifyPassword } = await import('./utils/password');
-      const { hashPassword, validatePasswordStrength } = await import('./utils/password');
+      const { verifyPassword, hashPassword, validatePasswordStrength } = await import('./utils/password');
       
       const isValidPassword = await verifyPassword(currentPassword, user.password);
       if (!isValidPassword) {
@@ -262,7 +288,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Setup 2FA
   app.post('/api/auth/2fa/setup', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const result = await authService.setupTwoFactor(req.user!.userId);
@@ -272,7 +297,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Enable 2FA
   app.post('/api/auth/2fa/enable', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const { token } = req.body;
@@ -286,7 +310,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Disable 2FA
   app.post('/api/auth/2fa/disable', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const { password } = req.body;
@@ -300,7 +323,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get current user
   app.get('/api/auth/user', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const user = await storage.getUser(req.user!.userId);
@@ -315,7 +337,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user sessions/login history
   app.get('/api/auth/sessions', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const sessions = await authService.getUserSessions(req.user!.userId);
@@ -325,7 +346,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user active sessions (refresh tokens)
   app.get('/api/user/sessions', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const sessions = await storage.getUserRefreshTokens(req.user!.userId);
@@ -352,7 +372,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user activity/login history
   app.get('/api/user/activity', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
@@ -364,56 +383,276 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================
-  // BUSINESS LOGIC ROUTES
+  // GOLD TRADING & SAVINGS ROUTES
   // ============================================
   
-  // Customer routes
-  app.get('/api/customers', authenticateToken, async (req, res) => {
+  // Get current gold prices
+  app.get('/api/gold-prices', async (req, res) => {
     try {
-      const customers = await storage.getCustomers();
-      res.json(customers);
+      const priceData = await fetchGoldPricesWithMargin();
+      res.json(priceData);
     } catch (error) {
-      console.error("Error fetching customers:", error);
-      res.status(500).json({ message: "Failed to fetch customers" });
+      console.error("Error fetching gold prices:", error);
+      res.status(500).json({ message: "Failed to fetch gold prices" });
     }
   });
 
-  app.get('/api/customers/:id', authenticateToken, async (req, res) => {
+  // Get gold price history
+  app.get('/api/gold-prices/history', authenticateToken, async (req, res) => {
     try {
-      const customer = await storage.getCustomer(req.params.id);
-      if (!customer) {
-        return res.status(404).json({ message: "Customer not found" });
-      }
-      res.json(customer);
+      const prices = await storage.getLatestGoldPrices();
+      res.json(prices);
     } catch (error) {
-      console.error("Error fetching customer:", error);
-      res.status(500).json({ message: "Failed to fetch customer" });
+      console.error("Error fetching gold price history:", error);
+      res.status(500).json({ message: "Failed to fetch gold price history" });
     }
   });
 
-  app.get('/api/customers/:id/loans', authenticateToken, async (req, res) => {
+  // Update gold prices (admin only)
+  app.post('/api/gold-prices', authenticateToken, requireAdmin, async (req: AuthenticatedRequest, res) => {
     try {
-      const transactions = await storage.getPawnTransactions();
-      const customerLoans = transactions.filter(t => t.customerId === req.params.id);
-      res.json(customerLoans);
-    } catch (error) {
-      console.error("Error fetching customer loans:", error);
-      res.status(500).json({ message: "Failed to fetch customer loans" });
-    }
-  });
-
-  app.post('/api/customers', authenticateToken, async (req, res) => {
-    try {
-      const validated = insertCustomerSchema.parse(req.body);
-      const customer = await storage.createCustomer(validated);
-      res.status(201).json(customer);
+      const { karat, buyPricePerGramMyr, sellPricePerGramMyr, marginPercentage } = req.body;
+      
+      const price = await storage.createGoldPrice({
+        karat,
+        buyPricePerGramMyr,
+        sellPricePerGramMyr,
+        marginPercentage,
+        effectiveDate: new Date(),
+        updatedBy: req.user!.userId,
+      });
+      
+      res.status(201).json(price);
     } catch (error: any) {
-      console.error("Error creating customer:", error);
-      res.status(400).json({ message: error.message || "Failed to create customer" });
+      console.error("Error updating gold price:", error);
+      res.status(400).json({ message: error.message || "Failed to update gold price" });
     }
   });
 
-  // Branch routes
+  // Get user's gold account
+  app.get('/api/gold-account', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      let account = await storage.getGoldAccount(req.user!.userId);
+      
+      // Create account if it doesn't exist (for existing users)
+      if (!account) {
+        account = await storage.createGoldAccount({
+          userId: req.user!.userId,
+          balanceGrams: "0",
+          balanceMyr: "0",
+          totalBoughtGrams: "0",
+          totalSoldGrams: "0",
+        });
+      }
+      
+      res.json(account);
+    } catch (error) {
+      console.error("Error fetching gold account:", error);
+      res.status(500).json({ message: "Failed to fetch gold account" });
+    }
+  });
+
+  // Get user's gold transactions
+  app.get('/api/gold-transactions', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const transactions = await storage.getUserGoldTransactions(req.user!.userId);
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching gold transactions:", error);
+      res.status(500).json({ message: "Failed to fetch gold transactions" });
+    }
+  });
+
+  // Buy gold (customer portal) - Only customers can buy for themselves
+  app.post('/api/gold/buy', authenticateToken, requireRole('customer'), async (req: AuthenticatedRequest, res) => {
+    try {
+      // Only accept grams and paymentMethod from client - compute everything else server-side
+      const { grams, paymentMethod } = req.body;
+      
+      if (!grams || grams <= 0) {
+        return res.status(400).json({ message: "Invalid grams amount" });
+      }
+      
+      if (!paymentMethod || !['cash', 'fpx', 'duitnow', 'card', 'online'].includes(paymentMethod)) {
+        return res.status(400).json({ message: "Invalid payment method" });
+      }
+      
+      // Use userId from authenticated token only
+      const userId = req.user!.userId;
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Get current gold price (999 karat as default) - server-side only
+      const priceData = await fetchGoldPricesWithMargin();
+      const goldPrice = priceData.prices.find(p => p.karat === "999");
+      if (!goldPrice) {
+        return res.status(500).json({ message: "Gold price not available" });
+      }
+      
+      // Compute total server-side to prevent price manipulation
+      const totalMyr = +grams * goldPrice.buyPricePerGramMyr;
+      const ratePerGram = goldPrice.buyPricePerGramMyr;
+      
+      // Create transaction with server-computed values
+      const transactionNumber = generateTransactionNumber();
+      const transaction = await storage.createGoldTransaction({
+        userId: userId, // From token only
+        branchId: user.branchId || "default",
+        transactionNumber,
+        type: "buy",
+        grams: grams.toString(),
+        ratePerGramMyr: ratePerGram.toString(), // Server-computed
+        totalMyr: totalMyr.toFixed(2).toString(), // Server-computed
+        paymentMethod,
+        paymentStatus: "pending",
+        status: "pending",
+        processedBy: userId,
+        transactionDate: new Date(),
+      });
+      
+      // Update gold account
+      const account = await storage.getGoldAccount(userId);
+      if (account) {
+        await storage.updateGoldAccount(userId, {
+          balanceGrams: (+account.balanceGrams + +grams).toString(),
+          totalBoughtGrams: (+account.totalBoughtGrams + +grams).toString(),
+        });
+      }
+      
+      // Update transaction status to completed (for now, until payment integration)
+      await storage.updateGoldTransaction(transaction.id, {
+        paymentStatus: "completed",
+        status: "completed",
+      });
+      
+      res.status(201).json(transaction);
+    } catch (error: any) {
+      console.error("Error buying gold:", error);
+      res.status(400).json({ message: error.message || "Failed to buy gold" });
+    }
+  });
+
+  // Sell gold (customer portal) - Only customers can sell their own gold
+  app.post('/api/gold/sell', authenticateToken, requireRole('customer'), async (req: AuthenticatedRequest, res) => {
+    try {
+      // Only accept grams and paymentMethod from client
+      const { grams, paymentMethod } = req.body;
+      
+      if (!grams || grams <= 0) {
+        return res.status(400).json({ message: "Invalid grams amount" });
+      }
+      
+      if (!paymentMethod || !['cash', 'fpx', 'duitnow', 'card', 'online'].includes(paymentMethod)) {
+        return res.status(400).json({ message: "Invalid payment method" });
+      }
+      
+      // Use userId from authenticated token only
+      const userId = req.user!.userId;
+      
+      // Check if user has enough balance
+      const account = await storage.getGoldAccount(userId);
+      if (!account || +account.balanceGrams < +grams) {
+        return res.status(400).json({ message: "Insufficient gold balance" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Get current gold price - server-side only
+      const priceData = await fetchGoldPricesWithMargin();
+      const goldPrice = priceData.prices.find(p => p.karat === "999");
+      if (!goldPrice) {
+        return res.status(500).json({ message: "Gold price not available" });
+      }
+      
+      // Compute total server-side to prevent price manipulation
+      const totalMyr = +grams * goldPrice.sellPricePerGramMyr;
+      const ratePerGram = goldPrice.sellPricePerGramMyr;
+      
+      // Create transaction with server-computed values
+      const transactionNumber = generateTransactionNumber();
+      const transaction = await storage.createGoldTransaction({
+        userId: userId, // From token only
+        branchId: user.branchId || "default",
+        transactionNumber,
+        type: "sell",
+        grams: grams.toString(),
+        ratePerGramMyr: ratePerGram.toString(), // Server-computed
+        totalMyr: totalMyr.toFixed(2).toString(), // Server-computed
+        paymentMethod,
+        paymentStatus: "pending",
+        status: "pending",
+        processedBy: userId,
+        transactionDate: new Date(),
+      });
+      
+      // Update gold account
+      await storage.updateGoldAccount(userId, {
+        balanceGrams: (+account.balanceGrams - +grams).toString(),
+        totalSoldGrams: (+account.totalSoldGrams + +grams).toString(),
+      });
+      
+      // Update transaction status to completed
+      await storage.updateGoldTransaction(transaction.id, {
+        paymentStatus: "completed",
+        status: "completed",
+      });
+      
+      res.status(201).json(transaction);
+    } catch (error: any) {
+      console.error("Error selling gold:", error);
+      res.status(400).json({ message: error.message || "Failed to sell gold" });
+    }
+  });
+
+  // ============================================
+  // ADMIN & MANAGER ROUTES
+  // ============================================
+  
+  // Get all users (admin/manager)
+  app.get('/api/users', authenticateToken, requireManagerOrAbove, async (req, res) => {
+    try {
+      const users = await storage.getUsers();
+      const sanitized = users.map(({ password, ...user }) => user);
+      res.json(sanitized);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Get all gold transactions (teller and above only)
+  app.get('/api/transactions', authenticateToken, requireRole('teller'), async (req, res) => {
+    try {
+      const transactions = await storage.getGoldTransactions();
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ message: "Failed to fetch transactions" });
+    }
+  });
+
+  // Approve transaction (manager/admin)
+  app.patch('/api/transactions/:id/approve', authenticateToken, requireManagerOrAbove, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { id } = req.params;
+      const transaction = await storage.updateGoldTransaction(id, {
+        status: "completed",
+        approvedBy: req.user!.userId,
+      });
+      res.json(transaction);
+    } catch (error: any) {
+      console.error("Error approving transaction:", error);
+      res.status(400).json({ message: error.message || "Failed to approve transaction" });
+    }
+  });
+
+  // Get all branches
   app.get('/api/branches', authenticateToken, async (req, res) => {
     try {
       const branches = await storage.getBranches();
@@ -424,175 +663,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Gold price routes
-  app.get('/api/gold-prices', authenticateToken, async (req, res) => {
+  // Create branch (admin only)
+  app.post('/api/branches', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const priceData = await fetchGoldPrices();
-      res.json(priceData);
-    } catch (error) {
-      console.error("Error fetching gold prices:", error);
-      res.status(500).json({ message: "Failed to fetch gold prices" });
-    }
-  });
-
-  // Pawn transaction routes
-  app.get('/api/loans', authenticateToken, async (req, res) => {
-    try {
-      const transactions = await storage.getPawnTransactions();
-      const customers = await storage.getCustomers();
-      
-      const loansWithCustomer = transactions.map(t => {
-        const customer = customers.find(c => c.id === t.customerId);
-        return {
-          id: t.id,
-          contractNumber: t.contractNumber,
-          customerName: customer?.fullName || "Unknown",
-          customerId: t.customerId,
-          loanAmountMyr: t.loanAmountMyr,
-          pledgeDate: t.pledgeDate,
-          maturityDate: t.maturityDate,
-          status: t.status,
-          monthlyFeeMyr: t.monthlyFeeMyr,
-          totalFeesAccruedMyr: t.totalFeesAccruedMyr,
-        };
-      });
-      
-      res.json(loansWithCustomer);
-    } catch (error) {
-      console.error("Error fetching loans:", error);
-      res.status(500).json({ message: "Failed to fetch loans" });
-    }
-  });
-
-  app.post('/api/transactions', authenticateToken, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const data = req.body;
-      
-      // Get gold price
-      const goldPrices = await fetchGoldPrices();
-      const goldPrice = goldPrices.prices.find(p => p.karat === data.karat);
-      if (!goldPrice) {
-        return res.status(400).json({ message: "Invalid karat selection" });
-      }
-
-      // Create gold item
-      const marketValue = goldPrice.pricePerGramMyr * data.weightGrams;
-      const goldItem = await storage.createGoldItem({
-        description: data.goldDescription,
-        karat: data.karat,
-        weightGrams: data.weightGrams.toString(),
-        goldPricePerGramMyr: goldPrice.pricePerGramMyr.toString(),
-        marketValueMyr: marketValue.toString(),
-        notes: data.notes,
-      });
-
-      // Calculate loan amount
-      const loanAmount = marketValue * (data.marginPercentage / 100);
-      
-      // Calculate maturity date
-      const pledgeDate = new Date();
-      const maturityDate = new Date(pledgeDate);
-      maturityDate.setMonth(maturityDate.getMonth() + data.tenureMonths);
-
-      // Create pawn transaction
-      const contractNumber = generateContractNumber();
-      const transaction = await storage.createPawnTransaction({
-        contractNumber,
-        customerId: data.customerId,
-        branchId: data.branchId,
-        goldItemId: goldItem.id,
-        loanAmountMyr: loanAmount.toString(),
-        marginPercentage: data.marginPercentage.toString(),
-        pledgeDate,
-        maturityDate,
-        tenureMonths: data.tenureMonths,
-        monthlyFeeMyr: data.monthlyFeeMyr.toString(),
-        totalFeesAccruedMyr: "0",
-        status: "active",
-        vaultLocation: `${data.vaultSection}-${data.vaultPosition}`,
-        processedBy: userId,
-      });
-
-      // Create vault item
-      await storage.createVaultItem({
-        pawnTransactionId: transaction.id,
-        branchId: data.branchId,
-        vaultSection: data.vaultSection,
-        vaultPosition: data.vaultPosition,
-        status: "stored",
-        storedDate: new Date(),
-      });
-
-      res.status(201).json(transaction);
+      const branchData = insertBranchSchema.parse(req.body);
+      const branch = await storage.createBranch(branchData);
+      res.status(201).json(branch);
     } catch (error: any) {
-      console.error("Error creating transaction:", error);
-      res.status(400).json({ message: error.message || "Failed to create transaction" });
+      console.error("Error creating branch:", error);
+      res.status(400).json({ message: error.message || "Failed to create branch" });
     }
   });
 
-  // Vault routes
-  app.get('/api/vault', authenticateToken, async (req, res) => {
+  // Get inventory (teller and above only)
+  app.get('/api/inventory', authenticateToken, requireRole('teller'), async (req, res) => {
     try {
-      const vaultItems = await storage.getVaultItems();
-      const transactions = await storage.getPawnTransactions();
-      const customers = await storage.getCustomers();
-      
-      const vaultWithDetails = vaultItems.map(v => {
-        const transaction = transactions.find(t => t.id === v.pawnTransactionId);
-        const customer = customers.find(c => c.id === transaction?.customerId);
-        return {
-          id: v.id,
-          pawnTransactionId: v.pawnTransactionId,
-          contractNumber: transaction?.contractNumber || "Unknown",
-          customerName: customer?.fullName || "Unknown",
-          vaultSection: v.vaultSection,
-          vaultPosition: v.vaultPosition,
-          barcode: v.barcode,
-          rfidTag: v.rfidTag,
-          status: v.status,
-          storedDate: v.storedDate,
-          lastAuditDate: v.lastAuditDate,
-        };
-      });
-      
-      res.json(vaultWithDetails);
+      const items = await storage.getInventoryItems();
+      res.json(items);
     } catch (error) {
-      console.error("Error fetching vault items:", error);
-      res.status(500).json({ message: "Failed to fetch vault items" });
+      console.error("Error fetching inventory:", error);
+      res.status(500).json({ message: "Failed to fetch inventory" });
     }
   });
 
-  // Renewal routes
-  app.get('/api/renewals', authenticateToken, async (req, res) => {
+  // Add inventory item (admin/manager)
+  app.post('/api/inventory', authenticateToken, requireManagerOrAbove, async (req, res) => {
     try {
-      const renewals = await storage.getRenewals();
-      const transactions = await storage.getPawnTransactions();
-      const customers = await storage.getCustomers();
-      
-      const renewalsWithDetails = renewals.map(r => {
-        const transaction = transactions.find(t => t.id === r.pawnTransactionId);
-        const customer = customers.find(c => c.id === transaction?.customerId);
-        return {
-          id: r.id,
-          contractNumber: transaction?.contractNumber || "Unknown",
-          customerName: customer?.fullName || "Unknown",
-          previousMaturityDate: r.previousMaturityDate,
-          newMaturityDate: r.newMaturityDate,
-          extensionMonths: r.extensionMonths,
-          renewalFeeMyr: r.renewalFeeMyr,
-          renewalDate: r.renewalDate,
-        };
-      });
-      
-      res.json(renewalsWithDetails);
-    } catch (error) {
-      console.error("Error fetching renewals:", error);
-      res.status(500).json({ message: "Failed to fetch renewals" });
+      const itemData = insertInventorySchema.parse(req.body);
+      const item = await storage.createInventoryItem(itemData);
+      res.status(201).json(item);
+    } catch (error: any) {
+      console.error("Error creating inventory item:", error);
+      res.status(400).json({ message: error.message || "Failed to create inventory item" });
     }
   });
 
-  // Dashboard stats route
+  // Get suppliers (admin/manager)
+  app.get('/api/suppliers', authenticateToken, requireManagerOrAbove, async (req, res) => {
+    try {
+      const suppliers = await storage.getSuppliers();
+      res.json(suppliers);
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+      res.status(500).json({ message: "Failed to fetch suppliers" });
+    }
+  });
+
+  // Create supplier (admin only)
+  app.post('/api/suppliers', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const supplierData = insertSupplierSchema.parse(req.body);
+      const supplier = await storage.createSupplier(supplierData);
+      res.status(201).json(supplier);
+    } catch (error: any) {
+      console.error("Error creating supplier:", error);
+      res.status(400).json({ message: error.message || "Failed to create supplier" });
+    }
+  });
+
+  // Get supplier invoices (admin/manager)
+  app.get('/api/supplier-invoices', authenticateToken, requireManagerOrAbove, async (req, res) => {
+    try {
+      const invoices = await storage.getSupplierInvoices();
+      res.json(invoices);
+    } catch (error) {
+      console.error("Error fetching supplier invoices:", error);
+      res.status(500).json({ message: "Failed to fetch supplier invoices" });
+    }
+  });
+
+  // Dashboard stats
   app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
@@ -603,28 +743,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/dashboard/recent-transactions', authenticateToken, async (req, res) => {
+  // Get audit logs (admin only)
+  app.get('/api/audit-logs', authenticateToken, requireAdmin, async (req, res) => {
     try {
-      const transactions = await storage.getPawnTransactions();
-      const customers = await storage.getCustomers();
-      
-      const recent = transactions.slice(0, 10).map(t => {
-        const customer = customers.find(c => c.id === t.customerId);
-        return {
-          id: t.id,
-          contractNumber: t.contractNumber,
-          customerName: customer?.fullName || "Unknown",
-          loanAmountMyr: t.loanAmountMyr,
-          pledgeDate: t.pledgeDate,
-          maturityDate: t.maturityDate,
-          status: t.status,
-        };
-      });
-      
-      res.json(recent);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const logs = await storage.getAuditLogs(limit);
+      res.json(logs);
     } catch (error) {
-      console.error("Error fetching recent transactions:", error);
-      res.status(500).json({ message: "Failed to fetch recent transactions" });
+      console.error("Error fetching audit logs:", error);
+      res.status(500).json({ message: "Failed to fetch audit logs" });
     }
   });
 

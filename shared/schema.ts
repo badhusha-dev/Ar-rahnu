@@ -32,8 +32,9 @@ export const users = pgTable("users", {
   password: varchar("password", { length: 255 }).notNull(),
   firstName: varchar("first_name", { length: 255 }),
   lastName: varchar("last_name", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
   profileImageUrl: varchar("profile_image_url", { length: 500 }),
-  role: varchar("role", { enum: ["teller", "manager", "auditor", "admin"] }).notNull().default("teller"),
+  role: varchar("role", { enum: ["customer", "teller", "manager", "admin"] }).notNull().default("customer"),
   branchId: varchar("branch_id"),
   isActive: boolean("is_active").notNull().default(true),
   
@@ -62,15 +63,6 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
-
-export const userRelations = relations(users, ({ one, many }) => ({
-  branch: one(branches, {
-    fields: [users.branchId],
-    references: [branches.id],
-  }),
-  refreshTokens: many(refreshTokens),
-  loginHistory: many(loginHistory),
-}));
 
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Invalid email format"),
@@ -119,9 +111,8 @@ export const branches = pgTable("branches", {
 
 export const branchRelations = relations(branches, ({ many }) => ({
   users: many(users),
-  customers: many(customers),
-  pawnTransactions: many(pawnTransactions),
-  vaultItems: many(vaultItems),
+  goldTransactions: many(goldTransactions),
+  inventory: many(inventory),
 }));
 
 export const insertBranchSchema = createInsertSchema(branches).omit({
@@ -133,286 +124,264 @@ export const insertBranchSchema = createInsertSchema(branches).omit({
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type Branch = typeof branches.$inferSelect;
 
-// Customers table
-export const customers = pgTable("customers", {
+// Gold Accounts table (customer wallets)
+export const goldAccounts = pgTable("gold_accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  icNumber: varchar("ic_number", { length: 50 }).notNull().unique(),
-  fullName: varchar("full_name", { length: 255 }).notNull(),
-  phone: varchar("phone", { length: 50 }).notNull(),
-  email: varchar("email", { length: 255 }),
-  address: text("address"),
-  photoUrl: varchar("photo_url", { length: 500 }),
-  icPhotoUrl: varchar("ic_photo_url", { length: 500 }),
-  branchId: varchar("branch_id").notNull(),
-  status: varchar("status", { enum: ["active", "inactive", "blacklisted"] }).notNull().default("active"),
-  kycVerified: boolean("kyc_verified").notNull().default(false),
-  kycVerifiedAt: timestamp("kyc_verified_at"),
-  notes: text("notes"),
+  userId: varchar("user_id").notNull().unique(),
+  balanceGrams: decimal("balance_grams", { precision: 12, scale: 4 }).notNull().default("0"),
+  balanceMyr: decimal("balance_myr", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalBoughtGrams: decimal("total_bought_grams", { precision: 12, scale: 4 }).notNull().default("0"),
+  totalSoldGrams: decimal("total_sold_grams", { precision: 12, scale: 4 }).notNull().default("0"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const customerRelations = relations(customers, ({ one, many }) => ({
-  branch: one(branches, {
-    fields: [customers.branchId],
-    references: [branches.id],
+export const goldAccountRelations = relations(goldAccounts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [goldAccounts.userId],
+    references: [users.id],
   }),
-  pawnTransactions: many(pawnTransactions),
+  transactions: many(goldTransactions),
 }));
 
-export const insertCustomerSchema = createInsertSchema(customers).omit({
+export const insertGoldAccountSchema = createInsertSchema(goldAccounts).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
-export type Customer = typeof customers.$inferSelect;
+export type InsertGoldAccount = z.infer<typeof insertGoldAccountSchema>;
+export type GoldAccount = typeof goldAccounts.$inferSelect;
 
-// Gold Items table
-export const goldItems = pgTable("gold_items", {
+// Gold Transactions table (buy/sell transactions)
+export const goldTransactions = pgTable("gold_transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  description: text("description").notNull(),
-  karat: varchar("karat", { enum: ["999", "916", "900", "875", "750", "585"] }).notNull(),
-  weightGrams: decimal("weight_grams", { precision: 10, scale: 3 }).notNull(),
-  goldPricePerGramMyr: decimal("gold_price_per_gram_myr", { precision: 10, scale: 2 }).notNull(),
-  marketValueMyr: decimal("market_value_myr", { precision: 12, scale: 2 }).notNull(),
-  photoUrls: text("photo_urls").array(),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const goldItemRelations = relations(goldItems, ({ one }) => ({
-  pawnTransaction: one(pawnTransactions, {
-    fields: [goldItems.id],
-    references: [pawnTransactions.goldItemId],
-  }),
-}));
-
-export const insertGoldItemSchema = createInsertSchema(goldItems).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type InsertGoldItem = z.infer<typeof insertGoldItemSchema>;
-export type GoldItem = typeof goldItems.$inferSelect;
-
-// Pawn Transactions table
-export const pawnTransactions = pgTable("pawn_transactions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  contractNumber: varchar("contract_number", { length: 100 }).notNull().unique(),
-  customerId: varchar("customer_id").notNull(),
+  userId: varchar("user_id").notNull(),
   branchId: varchar("branch_id").notNull(),
-  goldItemId: varchar("gold_item_id").notNull(),
+  transactionNumber: varchar("transaction_number", { length: 100 }).notNull().unique(),
   
-  // Loan details
-  loanAmountMyr: decimal("loan_amount_myr", { precision: 12, scale: 2 }).notNull(),
-  marginPercentage: decimal("margin_percentage", { precision: 5, scale: 2 }).notNull(),
+  // Transaction details
+  type: varchar("type", { enum: ["buy", "sell"] }).notNull(),
+  grams: decimal("grams", { precision: 12, scale: 4 }).notNull(),
+  ratePerGramMyr: decimal("rate_per_gram_myr", { precision: 10, scale: 2 }).notNull(),
+  totalMyr: decimal("total_myr", { precision: 12, scale: 2 }).notNull(),
   
-  // Dates
-  pledgeDate: timestamp("pledge_date").notNull().defaultNow(),
-  maturityDate: timestamp("maturity_date").notNull(),
-  tenureMonths: integer("tenure_months").notNull(),
-  
-  // Fees (Ujrah - safekeeping fee)
-  monthlyFeeMyr: decimal("monthly_fee_myr", { precision: 10, scale: 2 }).notNull(),
-  totalFeesAccruedMyr: decimal("total_fees_accrued_myr", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Payment details
+  paymentMethod: varchar("payment_method", { 
+    enum: ["cash", "fpx", "duitnow", "card", "online"] 
+  }).notNull(),
+  paymentReferenceNumber: varchar("payment_reference_number", { length: 100 }),
+  paymentStatus: varchar("payment_status", { 
+    enum: ["pending", "completed", "failed", "refunded"] 
+  }).notNull().default("pending"),
   
   // Status
   status: varchar("status", { 
-    enum: ["active", "renewed", "redeemed", "defaulted", "auctioned"] 
-  }).notNull().default("active"),
-  
-  // Vault
-  vaultLocation: varchar("vault_location", { length: 100 }),
+    enum: ["pending", "completed", "cancelled"] 
+  }).notNull().default("pending"),
   
   // Contract document
   contractPdfUrl: varchar("contract_pdf_url", { length: 500 }),
-  
-  // Signature
-  customerSignatureUrl: varchar("customer_signature_url", { length: 500 }),
-  tellerSignatureUrl: varchar("teller_signature_url", { length: 500 }),
+  receiptPdfUrl: varchar("receipt_pdf_url", { length: 500 }),
   
   // Audit
   processedBy: varchar("processed_by"),
   approvedBy: varchar("approved_by"),
+  notes: text("notes"),
   
+  transactionDate: timestamp("transaction_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const pawnTransactionRelations = relations(pawnTransactions, ({ one, many }) => ({
-  customer: one(customers, {
-    fields: [pawnTransactions.customerId],
-    references: [customers.id],
-  }),
-  branch: one(branches, {
-    fields: [pawnTransactions.branchId],
-    references: [branches.id],
-  }),
-  goldItem: one(goldItems, {
-    fields: [pawnTransactions.goldItemId],
-    references: [goldItems.id],
-  }),
-  processedByUser: one(users, {
-    fields: [pawnTransactions.processedBy],
+export const goldTransactionRelations = relations(goldTransactions, ({ one }) => ({
+  user: one(users, {
+    fields: [goldTransactions.userId],
     references: [users.id],
   }),
-  payments: many(payments),
-  renewals: many(renewals),
+  branch: one(branches, {
+    fields: [goldTransactions.branchId],
+    references: [branches.id],
+  }),
+  goldAccount: one(goldAccounts, {
+    fields: [goldTransactions.userId],
+    references: [goldAccounts.userId],
+  }),
+  processedByUser: one(users, {
+    fields: [goldTransactions.processedBy],
+    references: [users.id],
+  }),
 }));
 
-export const insertPawnTransactionSchema = createInsertSchema(pawnTransactions).omit({
+export const insertGoldTransactionSchema = createInsertSchema(goldTransactions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type InsertPawnTransaction = z.infer<typeof insertPawnTransactionSchema>;
-export type PawnTransaction = typeof pawnTransactions.$inferSelect;
+export type InsertGoldTransaction = z.infer<typeof insertGoldTransactionSchema>;
+export type GoldTransaction = typeof goldTransactions.$inferSelect;
 
-// Payments table
-export const payments = pgTable("payments", {
+// Inventory table (physical gold stock)
+export const inventory = pgTable("inventory", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  pawnTransactionId: varchar("pawn_transaction_id").notNull(),
-  amountMyr: decimal("amount_myr", { precision: 12, scale: 2 }).notNull(),
-  paymentType: varchar("payment_type", { 
-    enum: ["loan_repayment", "fee_payment", "partial_repayment", "full_settlement"] 
+  serialNumber: varchar("serial_number", { length: 100 }).notNull().unique(),
+  productType: varchar("product_type", { 
+    enum: ["bar", "coin", "jewelry", "wafer"] 
   }).notNull(),
-  paymentMethod: varchar("payment_method", { 
-    enum: ["cash", "bank_transfer", "card", "online"] 
-  }).notNull(),
-  referenceNumber: varchar("reference_number", { length: 100 }),
-  notes: text("notes"),
-  processedBy: varchar("processed_by"),
-  paymentDate: timestamp("payment_date").notNull().defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const paymentRelations = relations(payments, ({ one }) => ({
-  pawnTransaction: one(pawnTransactions, {
-    fields: [payments.pawnTransactionId],
-    references: [pawnTransactions.id],
-  }),
-  processedByUser: one(users, {
-    fields: [payments.processedBy],
-    references: [users.id],
-  }),
-}));
-
-export const insertPaymentSchema = createInsertSchema(payments).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type InsertPayment = z.infer<typeof insertPaymentSchema>;
-export type Payment = typeof payments.$inferSelect;
-
-// Renewals table
-export const renewals = pgTable("renewals", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  pawnTransactionId: varchar("pawn_transaction_id").notNull(),
-  previousMaturityDate: timestamp("previous_maturity_date").notNull(),
-  newMaturityDate: timestamp("new_maturity_date").notNull(),
-  extensionMonths: integer("extension_months").notNull(),
-  renewalFeeMyr: decimal("renewal_fee_myr", { precision: 10, scale: 2 }).notNull(),
-  newMonthlyFeeMyr: decimal("new_monthly_fee_myr", { precision: 10, scale: 2 }).notNull(),
-  processedBy: varchar("processed_by"),
-  renewalDate: timestamp("renewal_date").notNull().defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const renewalRelations = relations(renewals, ({ one }) => ({
-  pawnTransaction: one(pawnTransactions, {
-    fields: [renewals.pawnTransactionId],
-    references: [pawnTransactions.id],
-  }),
-  processedByUser: one(users, {
-    fields: [renewals.processedBy],
-    references: [users.id],
-  }),
-}));
-
-export const insertRenewalSchema = createInsertSchema(renewals).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type InsertRenewal = z.infer<typeof insertRenewalSchema>;
-export type Renewal = typeof renewals.$inferSelect;
-
-// Vault Items table (inventory tracking)
-export const vaultItems = pgTable("vault_items", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  pawnTransactionId: varchar("pawn_transaction_id").notNull(),
   branchId: varchar("branch_id").notNull(),
-  vaultSection: varchar("vault_section", { length: 50 }).notNull(),
-  vaultPosition: varchar("vault_position", { length: 50 }).notNull(),
+  
+  // Gold details
+  karat: varchar("karat", { enum: ["999", "916", "900", "875", "750", "585"] }).notNull(),
+  weightGrams: decimal("weight_grams", { precision: 10, scale: 3 }).notNull(),
+  description: text("description").notNull(),
+  
+  // Pricing
+  costPriceMyr: decimal("cost_price_myr", { precision: 12, scale: 2 }).notNull(),
+  currentMarketValueMyr: decimal("current_market_value_myr", { precision: 12, scale: 2 }).notNull(),
+  
+  // Tracking
   barcode: varchar("barcode", { length: 100 }).unique(),
   rfidTag: varchar("rfid_tag", { length: 100 }).unique(),
-  status: varchar("status", { enum: ["stored", "released", "transferred"] }).notNull().default("stored"),
-  storedDate: timestamp("stored_date").notNull().defaultNow(),
-  releasedDate: timestamp("released_date"),
-  lastAuditDate: timestamp("last_audit_date"),
+  location: varchar("location", { length: 100 }).notNull(),
+  
+  // Status
+  status: varchar("status", { 
+    enum: ["available", "sold", "reserved", "damaged"] 
+  }).notNull().default("available"),
+  
+  // Supplier info
+  supplierId: varchar("supplier_id"),
+  purchaseDate: timestamp("purchase_date"),
+  
+  // Media
+  photoUrls: text("photo_urls").array(),
+  certificateUrl: varchar("certificate_url", { length: 500 }),
+  
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const vaultItemRelations = relations(vaultItems, ({ one, many }) => ({
-  pawnTransaction: one(pawnTransactions, {
-    fields: [vaultItems.pawnTransactionId],
-    references: [pawnTransactions.id],
-  }),
+export const inventoryRelations = relations(inventory, ({ one }) => ({
   branch: one(branches, {
-    fields: [vaultItems.branchId],
+    fields: [inventory.branchId],
     references: [branches.id],
   }),
-  movements: many(vaultMovements),
+  supplier: one(suppliers, {
+    fields: [inventory.supplierId],
+    references: [suppliers.id],
+  }),
 }));
 
-export const insertVaultItemSchema = createInsertSchema(vaultItems).omit({
+export const insertInventorySchema = createInsertSchema(inventory).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export type InsertVaultItem = z.infer<typeof insertVaultItemSchema>;
-export type VaultItem = typeof vaultItems.$inferSelect;
+export type InsertInventory = z.infer<typeof insertInventorySchema>;
+export type Inventory = typeof inventory.$inferSelect;
 
-// Vault Movements table (audit trail)
-export const vaultMovements = pgTable("vault_movements", {
+// Suppliers table
+export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  vaultItemId: varchar("vault_item_id").notNull(),
-  movementType: varchar("movement_type", { 
-    enum: ["storage", "retrieval", "transfer", "audit", "inspection"] 
-  }).notNull(),
-  fromLocation: varchar("from_location", { length: 100 }),
-  toLocation: varchar("to_location", { length: 100 }),
-  performedBy: varchar("performed_by"),
-  reason: text("reason"),
-  movementDate: timestamp("movement_date").notNull().defaultNow(),
+  name: varchar("name", { length: 255 }).notNull(),
+  companyRegistrationNumber: varchar("company_registration_number", { length: 100 }),
+  contactPerson: varchar("contact_person", { length: 255 }),
+  phone: varchar("phone", { length: 50 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  address: text("address"),
+  bankName: varchar("bank_name", { length: 255 }),
+  bankAccountNumber: varchar("bank_account_number", { length: 100 }),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const vaultMovementRelations = relations(vaultMovements, ({ one }) => ({
-  vaultItem: one(vaultItems, {
-    fields: [vaultMovements.vaultItemId],
-    references: [vaultItems.id],
+export const supplierRelations = relations(suppliers, ({ many }) => ({
+  inventory: many(inventory),
+  invoices: many(supplierInvoices),
+}));
+
+export const insertSupplierSchema = createInsertSchema(suppliers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type Supplier = typeof suppliers.$inferSelect;
+
+// Supplier Invoices table
+export const supplierInvoices = pgTable("supplier_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceNumber: varchar("invoice_number", { length: 100 }).notNull().unique(),
+  supplierId: varchar("supplier_id").notNull(),
+  totalAmountMyr: decimal("total_amount_myr", { precision: 12, scale: 2 }).notNull(),
+  paidAmountMyr: decimal("paid_amount_myr", { precision: 12, scale: 2 }).notNull().default("0"),
+  status: varchar("status", { 
+    enum: ["pending", "partial", "paid", "cancelled"] 
+  }).notNull().default("pending"),
+  invoiceDate: timestamp("invoice_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  paidDate: timestamp("paid_date"),
+  paymentMethod: varchar("payment_method", { length: 100 }),
+  paymentReferenceNumber: varchar("payment_reference_number", { length: 100 }),
+  invoicePdfUrl: varchar("invoice_pdf_url", { length: 500 }),
+  notes: text("notes"),
+  approvedBy: varchar("approved_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const supplierInvoiceRelations = relations(supplierInvoices, ({ one }) => ({
+  supplier: one(suppliers, {
+    fields: [supplierInvoices.supplierId],
+    references: [suppliers.id],
   }),
-  performedByUser: one(users, {
-    fields: [vaultMovements.performedBy],
+  approvedByUser: one(users, {
+    fields: [supplierInvoices.approvedBy],
     references: [users.id],
   }),
 }));
 
-export const insertVaultMovementSchema = createInsertSchema(vaultMovements).omit({
+export const insertSupplierInvoiceSchema = createInsertSchema(supplierInvoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertSupplierInvoice = z.infer<typeof insertSupplierInvoiceSchema>;
+export type SupplierInvoice = typeof supplierInvoices.$inferSelect;
+
+// Gold Prices table (historical pricing)
+export const goldPrices = pgTable("gold_prices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  karat: varchar("karat", { enum: ["999", "916", "900", "875", "750", "585"] }).notNull(),
+  buyPricePerGramMyr: decimal("buy_price_per_gram_myr", { precision: 10, scale: 2 }).notNull(),
+  sellPricePerGramMyr: decimal("sell_price_per_gram_myr", { precision: 10, scale: 2 }).notNull(),
+  marginPercentage: decimal("margin_percentage", { precision: 5, scale: 2 }).notNull(),
+  effectiveDate: timestamp("effective_date").notNull().defaultNow(),
+  updatedBy: varchar("updated_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const goldPriceRelations = relations(goldPrices, ({ one }) => ({
+  updatedByUser: one(users, {
+    fields: [goldPrices.updatedBy],
+    references: [users.id],
+  }),
+}));
+
+export const insertGoldPriceSchema = createInsertSchema(goldPrices).omit({
   id: true,
   createdAt: true,
 });
 
-export type InsertVaultMovement = z.infer<typeof insertVaultMovementSchema>;
-export type VaultMovement = typeof vaultMovements.$inferSelect;
+export type InsertGoldPrice = z.infer<typeof insertGoldPriceSchema>;
+export type GoldPrice = typeof goldPrices.$inferSelect;
 
 // Refresh Tokens table (for JWT refresh token management)
 export const refreshTokens = pgTable("refresh_tokens", {
@@ -471,3 +440,46 @@ export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
 
 export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
 export type LoginHistory = typeof loginHistory.$inferSelect;
+
+// Audit Logs table (system-wide activity tracking)
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  action: varchar("action", { length: 255 }).notNull(),
+  entityType: varchar("entity_type", { length: 100 }),
+  entityId: varchar("entity_id", { length: 255 }),
+  changes: jsonb("changes"),
+  ipAddress: varchar("ip_address", { length: 100 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const auditLogRelations = relations(auditLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [auditLogs.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+
+// User relations (declared at the end after all tables are defined)
+export const userRelations = relations(users, ({ one, many }) => ({
+  branch: one(branches, {
+    fields: [users.branchId],
+    references: [branches.id],
+  }),
+  goldAccount: one(goldAccounts, {
+    fields: [users.id],
+    references: [goldAccounts.userId],
+  }),
+  refreshTokens: many(refreshTokens),
+  loginHistory: many(loginHistory),
+}));

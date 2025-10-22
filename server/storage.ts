@@ -1,41 +1,41 @@
 import {
   users,
-  customers,
-  goldItems,
-  pawnTransactions,
-  payments,
-  renewals,
-  vaultItems,
-  vaultMovements,
+  goldAccounts,
+  goldTransactions,
+  inventory,
+  suppliers,
+  supplierInvoices,
+  goldPrices,
   branches,
   refreshTokens,
   loginHistory,
+  auditLogs,
   type User,
   type UpsertUser,
   type InsertUser,
-  type Customer,
-  type InsertCustomer,
-  type GoldItem,
-  type InsertGoldItem,
-  type PawnTransaction,
-  type InsertPawnTransaction,
-  type Payment,
-  type InsertPayment,
-  type Renewal,
-  type InsertRenewal,
-  type VaultItem,
-  type InsertVaultItem,
-  type VaultMovement,
-  type InsertVaultMovement,
+  type GoldAccount,
+  type InsertGoldAccount,
+  type GoldTransaction,
+  type InsertGoldTransaction,
+  type Inventory,
+  type InsertInventory,
+  type Supplier,
+  type InsertSupplier,
+  type SupplierInvoice,
+  type InsertSupplierInvoice,
+  type GoldPrice,
+  type InsertGoldPrice,
   type Branch,
   type InsertBranch,
   type RefreshToken,
   type InsertRefreshToken,
   type LoginHistory,
   type InsertLoginHistory,
+  type AuditLog,
+  type InsertAuditLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, and, gte, lt } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lt, or, like } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -46,6 +46,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<User>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getUsers(): Promise<User[]>;
   
   // Refresh token operations
   createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken>;
@@ -59,41 +60,50 @@ export interface IStorage {
   createLoginHistory(history: InsertLoginHistory): Promise<LoginHistory>;
   getUserLoginHistory(userId: string, limit?: number): Promise<LoginHistory[]>;
   
-  // Customer operations
-  getCustomers(): Promise<Customer[]>;
-  getCustomer(id: string): Promise<Customer | undefined>;
-  createCustomer(customer: InsertCustomer): Promise<Customer>;
-  updateCustomer(id: string, customer: Partial<InsertCustomer>): Promise<Customer>;
-  
   // Branch operations
   getBranches(): Promise<Branch[]>;
   getBranch(id: string): Promise<Branch | undefined>;
   createBranch(branch: InsertBranch): Promise<Branch>;
+  updateBranch(id: string, branch: Partial<InsertBranch>): Promise<Branch>;
   
-  // Gold item operations
-  createGoldItem(item: InsertGoldItem): Promise<GoldItem>;
-  getGoldItem(id: string): Promise<GoldItem | undefined>;
+  // Gold account operations
+  getGoldAccount(userId: string): Promise<GoldAccount | undefined>;
+  createGoldAccount(account: InsertGoldAccount): Promise<GoldAccount>;
+  updateGoldAccount(userId: string, account: Partial<InsertGoldAccount>): Promise<GoldAccount>;
   
-  // Pawn transaction operations
-  getPawnTransactions(): Promise<PawnTransaction[]>;
-  getPawnTransaction(id: string): Promise<PawnTransaction | undefined>;
-  createPawnTransaction(transaction: InsertPawnTransaction): Promise<PawnTransaction>;
-  updatePawnTransaction(id: string, transaction: Partial<InsertPawnTransaction>): Promise<PawnTransaction>;
+  // Gold transaction operations
+  getGoldTransactions(): Promise<GoldTransaction[]>;
+  getGoldTransaction(id: string): Promise<GoldTransaction | undefined>;
+  getUserGoldTransactions(userId: string): Promise<GoldTransaction[]>;
+  createGoldTransaction(transaction: InsertGoldTransaction): Promise<GoldTransaction>;
+  updateGoldTransaction(id: string, transaction: Partial<InsertGoldTransaction>): Promise<GoldTransaction>;
   
-  // Payment operations
-  getPayments(pawnTransactionId: string): Promise<Payment[]>;
-  createPayment(payment: InsertPayment): Promise<Payment>;
+  // Inventory operations
+  getInventoryItems(): Promise<Inventory[]>;
+  getInventoryItem(id: string): Promise<Inventory | undefined>;
+  createInventoryItem(item: InsertInventory): Promise<Inventory>;
+  updateInventoryItem(id: string, item: Partial<InsertInventory>): Promise<Inventory>;
   
-  // Renewal operations
-  getRenewals(): Promise<Renewal[]>;
-  createRenewal(renewal: InsertRenewal): Promise<Renewal>;
+  // Supplier operations
+  getSuppliers(): Promise<Supplier[]>;
+  getSupplier(id: string): Promise<Supplier | undefined>;
+  createSupplier(supplier: InsertSupplier): Promise<Supplier>;
+  updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier>;
   
-  // Vault operations
-  getVaultItems(): Promise<VaultItem[]>;
-  getVaultItem(id: string): Promise<VaultItem | undefined>;
-  createVaultItem(item: InsertVaultItem): Promise<VaultItem>;
-  updateVaultItem(id: string, item: Partial<InsertVaultItem>): Promise<VaultItem>;
-  createVaultMovement(movement: InsertVaultMovement): Promise<VaultMovement>;
+  // Supplier invoice operations
+  getSupplierInvoices(): Promise<SupplierInvoice[]>;
+  getSupplierInvoice(id: string): Promise<SupplierInvoice | undefined>;
+  createSupplierInvoice(invoice: InsertSupplierInvoice): Promise<SupplierInvoice>;
+  updateSupplierInvoice(id: string, invoice: Partial<InsertSupplierInvoice>): Promise<SupplierInvoice>;
+  
+  // Gold price operations
+  getLatestGoldPrices(): Promise<GoldPrice[]>;
+  getGoldPriceByKarat(karat: string): Promise<GoldPrice | undefined>;
+  createGoldPrice(price: InsertGoldPrice): Promise<GoldPrice>;
+  
+  // Audit log operations
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  getAuditLogs(limit?: number): Promise<AuditLog[]>;
   
   // Dashboard stats
   getDashboardStats(): Promise<any>;
@@ -150,6 +160,10 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
   // Refresh token operations
   async createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken> {
     const [created] = await db.insert(refreshTokens).values(token).returning();
@@ -200,33 +214,9 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  // Customer operations
-  async getCustomers(): Promise<Customer[]> {
-    return await db.select().from(customers).orderBy(desc(customers.createdAt));
-  }
-
-  async getCustomer(id: string): Promise<Customer | undefined> {
-    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-    return customer;
-  }
-
-  async createCustomer(customer: InsertCustomer): Promise<Customer> {
-    const [created] = await db.insert(customers).values(customer).returning();
-    return created;
-  }
-
-  async updateCustomer(id: string, customer: Partial<InsertCustomer>): Promise<Customer> {
-    const [updated] = await db
-      .update(customers)
-      .set({ ...customer, updatedAt: new Date() })
-      .where(eq(customers.id, id))
-      .returning();
-    return updated;
-  }
-
   // Branch operations
   async getBranches(): Promise<Branch[]> {
-    return await db.select().from(branches).orderBy(branches.name);
+    return await db.select().from(branches).orderBy(desc(branches.createdAt));
   }
 
   async getBranch(id: string): Promise<Branch | undefined> {
@@ -239,131 +229,224 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  // Gold item operations
-  async createGoldItem(item: InsertGoldItem): Promise<GoldItem> {
-    const [created] = await db.insert(goldItems).values(item).returning();
+  async updateBranch(id: string, branch: Partial<InsertBranch>): Promise<Branch> {
+    const [updated] = await db
+      .update(branches)
+      .set({ ...branch, updatedAt: new Date() })
+      .where(eq(branches.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Gold account operations
+  async getGoldAccount(userId: string): Promise<GoldAccount | undefined> {
+    const [account] = await db.select().from(goldAccounts).where(eq(goldAccounts.userId, userId));
+    return account;
+  }
+
+  async createGoldAccount(account: InsertGoldAccount): Promise<GoldAccount> {
+    const [created] = await db.insert(goldAccounts).values(account).returning();
     return created;
   }
 
-  async getGoldItem(id: string): Promise<GoldItem | undefined> {
-    const [item] = await db.select().from(goldItems).where(eq(goldItems.id, id));
-    return item;
+  async updateGoldAccount(userId: string, account: Partial<InsertGoldAccount>): Promise<GoldAccount> {
+    const [updated] = await db
+      .update(goldAccounts)
+      .set({ ...account, updatedAt: new Date() })
+      .where(eq(goldAccounts.userId, userId))
+      .returning();
+    return updated;
   }
 
-  // Pawn transaction operations
-  async getPawnTransactions(): Promise<PawnTransaction[]> {
-    return await db.select().from(pawnTransactions).orderBy(desc(pawnTransactions.pledgeDate));
+  // Gold transaction operations
+  async getGoldTransactions(): Promise<GoldTransaction[]> {
+    return await db.select().from(goldTransactions).orderBy(desc(goldTransactions.transactionDate));
   }
 
-  async getPawnTransaction(id: string): Promise<PawnTransaction | undefined> {
-    const [transaction] = await db.select().from(pawnTransactions).where(eq(pawnTransactions.id, id));
+  async getGoldTransaction(id: string): Promise<GoldTransaction | undefined> {
+    const [transaction] = await db.select().from(goldTransactions).where(eq(goldTransactions.id, id));
     return transaction;
   }
 
-  async createPawnTransaction(transaction: InsertPawnTransaction): Promise<PawnTransaction> {
-    const [created] = await db.insert(pawnTransactions).values(transaction).returning();
+  async getUserGoldTransactions(userId: string): Promise<GoldTransaction[]> {
+    return await db
+      .select()
+      .from(goldTransactions)
+      .where(eq(goldTransactions.userId, userId))
+      .orderBy(desc(goldTransactions.transactionDate));
+  }
+
+  async createGoldTransaction(transaction: InsertGoldTransaction): Promise<GoldTransaction> {
+    const [created] = await db.insert(goldTransactions).values(transaction).returning();
     return created;
   }
 
-  async updatePawnTransaction(id: string, transaction: Partial<InsertPawnTransaction>): Promise<PawnTransaction> {
+  async updateGoldTransaction(id: string, transaction: Partial<InsertGoldTransaction>): Promise<GoldTransaction> {
     const [updated] = await db
-      .update(pawnTransactions)
+      .update(goldTransactions)
       .set({ ...transaction, updatedAt: new Date() })
-      .where(eq(pawnTransactions.id, id))
+      .where(eq(goldTransactions.id, id))
       .returning();
     return updated;
   }
 
-  // Payment operations
-  async getPayments(pawnTransactionId: string): Promise<Payment[]> {
-    return await db
-      .select()
-      .from(payments)
-      .where(eq(payments.pawnTransactionId, pawnTransactionId))
-      .orderBy(desc(payments.paymentDate));
+  // Inventory operations
+  async getInventoryItems(): Promise<Inventory[]> {
+    return await db.select().from(inventory).orderBy(desc(inventory.createdAt));
   }
 
-  async createPayment(payment: InsertPayment): Promise<Payment> {
-    const [created] = await db.insert(payments).values(payment).returning();
-    return created;
-  }
-
-  // Renewal operations
-  async getRenewals(): Promise<Renewal[]> {
-    return await db.select().from(renewals).orderBy(desc(renewals.renewalDate));
-  }
-
-  async createRenewal(renewal: InsertRenewal): Promise<Renewal> {
-    const [created] = await db.insert(renewals).values(renewal).returning();
-    return created;
-  }
-
-  // Vault operations
-  async getVaultItems(): Promise<VaultItem[]> {
-    return await db.select().from(vaultItems).orderBy(desc(vaultItems.storedDate));
-  }
-
-  async getVaultItem(id: string): Promise<VaultItem | undefined> {
-    const [item] = await db.select().from(vaultItems).where(eq(vaultItems.id, id));
+  async getInventoryItem(id: string): Promise<Inventory | undefined> {
+    const [item] = await db.select().from(inventory).where(eq(inventory.id, id));
     return item;
   }
 
-  async createVaultItem(item: InsertVaultItem): Promise<VaultItem> {
-    const [created] = await db.insert(vaultItems).values(item).returning();
+  async createInventoryItem(item: InsertInventory): Promise<Inventory> {
+    const [created] = await db.insert(inventory).values(item).returning();
     return created;
   }
 
-  async updateVaultItem(id: string, item: Partial<InsertVaultItem>): Promise<VaultItem> {
+  async updateInventoryItem(id: string, item: Partial<InsertInventory>): Promise<Inventory> {
     const [updated] = await db
-      .update(vaultItems)
+      .update(inventory)
       .set({ ...item, updatedAt: new Date() })
-      .where(eq(vaultItems.id, id))
+      .where(eq(inventory.id, id))
       .returning();
     return updated;
   }
 
-  async createVaultMovement(movement: InsertVaultMovement): Promise<VaultMovement> {
-    const [created] = await db.insert(vaultMovements).values(movement).returning();
+  // Supplier operations
+  async getSuppliers(): Promise<Supplier[]> {
+    return await db.select().from(suppliers).orderBy(desc(suppliers.createdAt));
+  }
+
+  async getSupplier(id: string): Promise<Supplier | undefined> {
+    const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, id));
+    return supplier;
+  }
+
+  async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
+    const [created] = await db.insert(suppliers).values(supplier).returning();
     return created;
+  }
+
+  async updateSupplier(id: string, supplier: Partial<InsertSupplier>): Promise<Supplier> {
+    const [updated] = await db
+      .update(suppliers)
+      .set({ ...supplier, updatedAt: new Date() })
+      .where(eq(suppliers.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Supplier invoice operations
+  async getSupplierInvoices(): Promise<SupplierInvoice[]> {
+    return await db.select().from(supplierInvoices).orderBy(desc(supplierInvoices.invoiceDate));
+  }
+
+  async getSupplierInvoice(id: string): Promise<SupplierInvoice | undefined> {
+    const [invoice] = await db.select().from(supplierInvoices).where(eq(supplierInvoices.id, id));
+    return invoice;
+  }
+
+  async createSupplierInvoice(invoice: InsertSupplierInvoice): Promise<SupplierInvoice> {
+    const [created] = await db.insert(supplierInvoices).values(invoice).returning();
+    return created;
+  }
+
+  async updateSupplierInvoice(id: string, invoice: Partial<InsertSupplierInvoice>): Promise<SupplierInvoice> {
+    const [updated] = await db
+      .update(supplierInvoices)
+      .set({ ...invoice, updatedAt: new Date() })
+      .where(eq(supplierInvoices.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Gold price operations
+  async getLatestGoldPrices(): Promise<GoldPrice[]> {
+    return await db
+      .select()
+      .from(goldPrices)
+      .orderBy(desc(goldPrices.effectiveDate))
+      .limit(6);
+  }
+
+  async getGoldPriceByKarat(karat: string): Promise<GoldPrice | undefined> {
+    const [price] = await db
+      .select()
+      .from(goldPrices)
+      .where(eq(goldPrices.karat, karat as any))
+      .orderBy(desc(goldPrices.effectiveDate))
+      .limit(1);
+    return price;
+  }
+
+  async createGoldPrice(price: InsertGoldPrice): Promise<GoldPrice> {
+    const [created] = await db.insert(goldPrices).values(price).returning();
+    return created;
+  }
+
+  // Audit log operations
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const [created] = await db.insert(auditLogs).values(log).returning();
+    return created;
+  }
+
+  async getAuditLogs(limit: number = 100): Promise<AuditLog[]> {
+    return await db
+      .select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.timestamp))
+      .limit(limit);
   }
 
   // Dashboard stats
   async getDashboardStats(): Promise<any> {
-    const activeTransactions = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(pawnTransactions)
-      .where(eq(pawnTransactions.status, "active"));
+    const [totalTransactionsResult] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(goldTransactions);
 
-    const outstandingAmount = await db
-      .select({ total: sql<number>`sum(${pawnTransactions.loanAmountMyr})` })
-      .from(pawnTransactions)
-      .where(eq(pawnTransactions.status, "active"));
+    const [totalBuyResult] = await db
+      .select({ 
+        count: sql<number>`cast(count(*) as integer)`,
+        grams: sql<number>`cast(sum(${goldTransactions.grams}) as decimal(12,4))`,
+        amount: sql<number>`cast(sum(${goldTransactions.totalMyr}) as decimal(12,2))`
+      })
+      .from(goldTransactions)
+      .where(eq(goldTransactions.type, 'buy'));
 
-    const now = new Date();
-    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
-    const maturingCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(pawnTransactions)
-      .where(
-        and(
-          eq(pawnTransactions.status, "active"),
-          gte(pawnTransactions.maturityDate, now),
-          sql`${pawnTransactions.maturityDate} <= ${weekFromNow}`
-        )
-      );
+    const [totalSellResult] = await db
+      .select({ 
+        count: sql<number>`cast(count(*) as integer)`,
+        grams: sql<number>`cast(sum(${goldTransactions.grams}) as decimal(12,4))`,
+        amount: sql<number>`cast(sum(${goldTransactions.totalMyr}) as decimal(12,2))`
+      })
+      .from(goldTransactions)
+      .where(eq(goldTransactions.type, 'sell'));
 
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthlyRevenue = await db
-      .select({ total: sql<number>`sum(${pawnTransactions.totalFeesAccruedMyr})` })
-      .from(pawnTransactions)
-      .where(gte(pawnTransactions.pledgeDate, monthStart));
+    const [totalUsersResult] = await db
+      .select({ count: sql<number>`cast(count(*) as integer)` })
+      .from(users);
+
+    const [totalInventoryResult] = await db
+      .select({ 
+        count: sql<number>`cast(count(*) as integer)`,
+        value: sql<number>`cast(sum(${inventory.currentMarketValueMyr}) as decimal(12,2))`
+      })
+      .from(inventory)
+      .where(eq(inventory.status, 'available'));
 
     return {
-      totalActivePawns: Number(activeTransactions[0]?.count || 0),
-      outstandingAmountMyr: Number(outstandingAmount[0]?.total || 0),
-      itemsMaturingThisWeek: Number(maturingCount[0]?.count || 0),
-      monthlyRevenueMyr: Number(monthlyRevenue[0]?.total || 0),
+      totalTransactions: totalTransactionsResult?.count || 0,
+      totalBuyTransactions: totalBuyResult?.count || 0,
+      totalSellTransactions: totalSellResult?.count || 0,
+      totalBuyGrams: totalBuyResult?.grams || 0,
+      totalSellGrams: totalSellResult?.grams || 0,
+      totalBuyAmount: totalBuyResult?.amount || 0,
+      totalSellAmount: totalSellResult?.amount || 0,
+      totalUsers: totalUsersResult?.count || 0,
+      totalInventoryItems: totalInventoryResult?.count || 0,
+      totalInventoryValue: totalInventoryResult?.value || 0,
     };
   }
 }
