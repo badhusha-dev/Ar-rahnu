@@ -1,0 +1,75 @@
+🕌 Ar-Rahnu System – Full Module Breakdown
+1. 🧭 Core Modules
+Module	Description	Key Features
+Customer Management	Manage borrower (murtahin) profiles	Register / verify customer (IC, phone, KYC), store contact info, link to pawn records
+Gold Valuation	Appraise pledged gold/jewelry	Real-time gold price API integration, manual adjustment, karat (916, 999, etc.) detection
+Pawn Transaction (Rahn Contract)	Main process of pledge (rahn)	Create new pawn, generate Ar-Rahnu contract, assign storage vault ID, calculate margin
+Loan Disbursement (Qard Hasan)	Loan based on pledged item	Auto-calculate 70–80% margin, disburse via cash or account transfer, track loan balance
+Safekeeping Fee (Ujrah)	Monthly storage charge	Compute monthly upah simpan, generate invoices, renewal reminders
+Redemption / Settlement	Customer redeems pledged item	Payment gateway or counter payment, release item after full repayment
+Auction / Disposal	If borrower defaults	Auction workflow, approval chain, surplus refund calculation
+2. 💰 Financial & Accounting Modules
+Module	Description	Key Features
+Ledger & Journal Entries	Auto record financial transactions	Integration with accounting system (GL, P&L), double-entry ledger
+Loan Repayment Tracking	Manage installments and renewals	Partial or full payments, extend tenure, interest-free model
+Fee Management	Manage service and safekeeping fees	Rate management, fee structure by gold type/value
+Cash Flow Management	Monitor cash movements	Vault cash, teller cash, reconciliation
+Profit & Loss Reporting	Financial reporting	Summarize fees, auctions, and operational expenses
+3. 🧾 Operational Modules
+Module	Description	Key Features
+Branch Management	Multi-branch support	Track branch-wise transactions, gold inventory, user access
+Inventory & Vault Management	Gold storage and tracking	Vault tagging, audit trail, item movement logs
+Renewal Management	Extend pawn contract	Auto fee recalculation, new maturity date, updated documentation
+Document Management	Store digital contracts	Generate Rahn certificate (PDF), upload documents (IC, photos, signatures)
+Audit & Compliance	Ensure Shariah and internal compliance	Full audit trail, access logs, Shariah report, internal audit reports
+4. 👥 User & Access Control
+Module	Description	Key Features
+User Management	Manage employees and roles	Add users (tellers, managers, auditors), status control
+Role-Based Access Control (RBAC)	Permission management	Define access by module, restrict financial functions
+Authentication & Security	Secure access	OTP login, two-factor authentication, JWT tokens
+5. 📊 Reporting & Analytics
+Module	Description	Key Features
+Dashboard Analytics	Overview of performance	Total pledged gold, outstanding loans, maturity alerts
+Operational Reports	Daily & monthly summaries	Pawn count, redeemed vs. defaulted, cash flow reports
+Customer Insights	Behavioral analytics	Average loan value, repayment trends
+Shariah Compliance Reports	Islamic audit output	Ensure all contracts are free from riba and gharar
+6. 🌐 Integration Modules
+Integration	Description
+Gold Price API	Fetch daily gold market rates (e.g. from Bursa Malaysia, Kitco)
+Payment Gateway	Handle repayments (FPX, DuitNow, etc.)
+SMS / WhatsApp Gateway	Send reminders (renewal, maturity, auction notices)
+Accounting System API	Integrate with ERP / GL (SAP, Odoo, or custom system)
+e-KYC / MyKad Reader	Verify customer identity
+Vault RFID / Barcode System	Physical item tracking and audit
+7. 🖥️ Front-End Modules
+Interface	Description	Technology Example
+Customer Portal	View loans, renew, make payment	React / Vue.js
+Branch Staff Portal	Manage transactions, approve loans	React Admin Dashboard / Vue Admin
+Auditor Dashboard	Review transactions and compliance	Angular / React
+Mobile App (optional)	Customer loan tracking and alerts	Flutter / React Native
+8. 🔐 System & Backend Modules
+Module	Description
+API Gateway	Handles REST/GraphQL API requests securely
+Notification Service	Manages all alerts and reminders
+Scheduler Service	Handles maturity reminders, fee calculations
+Database	PostgreSQL / Oracle / MongoDB (for documents)
+Logging & Monitoring	Centralized logs (ELK Stack, Grafana)
+🧮 Example Workflow (Simplified)
+
+Customer brings gold → Appraised (RM17,500)
+
+Loan disbursed → RM13,125 (75%)
+
+System auto-creates:
+
+Rahn contract (PDF)
+
+Qard Hasan loan record
+
+Monthly safekeeping fee schedule
+
+Payment reminders sent before maturity
+
+Repayment → Item released
+
+Audit → Shariah-compliant verification and record keeping
