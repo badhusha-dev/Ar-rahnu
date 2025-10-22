@@ -20,6 +20,8 @@ import {
   TrendingUp,
   RefreshCw,
   LogOut,
+  User,
+  Activity,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -77,11 +79,30 @@ const menuItems = [
   },
 ];
 
+const accountMenuItems = [
+  {
+    title: "Profile & Settings",
+    url: "/profile",
+    icon: User,
+    roles: ["teller", "manager", "auditor", "admin"],
+  },
+  {
+    title: "Activity Log",
+    url: "/activity",
+    icon: Activity,
+    roles: ["teller", "manager", "auditor", "admin"],
+  },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
 
   const filteredItems = menuItems.filter((item) =>
+    item.roles.includes(user?.role || "teller")
+  );
+
+  const filteredAccountItems = accountMenuItems.filter((item) =>
     item.roles.includes(user?.role || "teller")
   );
 
@@ -113,6 +134,24 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={location === item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <Link href={item.url}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Account</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {filteredAccountItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
                     <Link href={item.url}>

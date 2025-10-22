@@ -215,14 +215,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reset password
   app.post('/api/auth/reset-password', async (req, res) => {
     try {
-      const { token, password } = req.body;
-      if (!token || !password) {
+      const { token, password, newPassword } = req.body;
+      const passwordToUse = newPassword || password;
+      if (!token || !passwordToUse) {
         return res.status(400).json({ message: 'Token and password required' });
       }
-      const result = await authService.resetPassword(token, password);
+      const result = await authService.resetPassword(token, passwordToUse);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Change password (for logged-in users)
+  app.post('/api/auth/change-password', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: 'Current password and new password required' });
+      }
+      
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const { verifyPassword } = await import('./utils/password');
+      const { hashPassword, validatePasswordStrength } = await import('./utils/password');
+      
+      const isValidPassword = await verifyPassword(currentPassword, user.password);
+      if (!isValidPassword) {
+        return res.status(400).json({ message: 'Current password is incorrect' });
+      }
+
+      const passwordCheck = validatePasswordStrength(newPassword);
+      if (!passwordCheck.valid) {
+        return res.status(400).json({ message: passwordCheck.message || 'Invalid password' });
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUser(user.id, { password: hashedPassword });
+
+      res.json({ message: 'Password changed successfully' });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
@@ -284,6 +320,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const sessions = await authService.getUserSessions(req.user!.userId);
       res.json(sessions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get user active sessions (refresh tokens)
+  app.get('/api/user/sessions', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const sessions = await storage.getUserRefreshTokens(req.user!.userId);
+      
+      const activeSessions = sessions.filter(session => new Date() < session.expiresAt).map(session => {
+        const { parseUserAgent } = require('./utils/deviceParser');
+        const deviceInfo = parseUserAgent(session.userAgent || '');
+        
+        return {
+          id: session.id,
+          device: deviceInfo.device || 'Unknown Device',
+          browser: deviceInfo.browser || 'Unknown Browser',
+          os: deviceInfo.os || 'Unknown OS',
+          ipAddress: session.ipAddress || 'Unknown',
+          loginAt: session.createdAt,
+          userAgent: session.userAgent || '',
+          expiresAt: session.expiresAt,
+        };
+      });
+      
+      res.json(activeSessions);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get user activity/login history
+  app.get('/api/user/activity', authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const history = await storage.getUserLoginHistory(req.user!.userId, limit);
+      res.json(history);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

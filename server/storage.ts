@@ -50,6 +50,7 @@ export interface IStorage {
   // Refresh token operations
   createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken>;
   getRefreshToken(token: string): Promise<RefreshToken | undefined>;
+  getUserRefreshTokens(userId: string): Promise<RefreshToken[]>;
   deleteRefreshToken(token: string): Promise<void>;
   deleteUserRefreshTokens(userId: string): Promise<void>;
   cleanupExpiredTokens(): Promise<void>;
@@ -161,6 +162,14 @@ export class DatabaseStorage implements IStorage {
       .from(refreshTokens)
       .where(eq(refreshTokens.token, token));
     return refreshToken;
+  }
+
+  async getUserRefreshTokens(userId: string): Promise<RefreshToken[]> {
+    return await db
+      .select()
+      .from(refreshTokens)
+      .where(eq(refreshTokens.userId, userId))
+      .orderBy(desc(refreshTokens.createdAt));
   }
 
   async deleteRefreshToken(token: string): Promise<void> {

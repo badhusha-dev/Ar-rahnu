@@ -9,6 +9,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPage from "@/pages/verify-email";
+import ProfilePage from "@/pages/profile";
+import SessionsPage from "@/pages/sessions";
+import ActivityPage from "@/pages/activity";
 import Dashboard from "@/pages/dashboard";
 import Customers from "@/pages/customers";
 import NewCustomer from "@/pages/new-customer";
@@ -40,6 +46,9 @@ function Router() {
       <Switch>
         <Route path="/login" component={LoginPage} />
         <Route path="/register" component={RegisterPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/verify-email" component={VerifyEmailPage} />
         <Route component={LoginPage} />
       </Switch>
     );
@@ -63,6 +72,9 @@ function Router() {
             <div className="mx-auto max-w-7xl">
               <Switch>
                 <Route path="/" component={Dashboard} />
+                <Route path="/profile" component={ProfilePage} />
+                <Route path="/sessions" component={SessionsPage} />
+                <Route path="/activity" component={ActivityPage} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/new" component={NewCustomer} />
                 <Route path="/customers/:id" component={CustomerDetail} />
