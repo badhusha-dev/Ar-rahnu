@@ -86,6 +86,8 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        heading: ["Poppins", "sans-serif"],
+        arabic: ["Amiri", "serif"],
       },
       keyframes: {
         "accordion-down": {

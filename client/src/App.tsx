@@ -3,20 +3,73 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/hooks/useAuth";
+import Landing from "@/pages/landing";
+import Dashboard from "@/pages/dashboard";
+import Customers from "@/pages/customers";
+import NewCustomer from "@/pages/new-customer";
+import CustomerDetail from "@/pages/customer-detail";
+import GoldPrices from "@/pages/gold-prices";
+import Loans from "@/pages/loans";
+import NewTransaction from "@/pages/new-transaction";
+import Vault from "@/pages/vault";
+import Branches from "@/pages/branches";
+import Renewals from "@/pages/renewals";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route component={Landing} />
+      </Switch>
+    );
+  }
+
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
   return (
-    <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
-      <Route component={NotFound} />
-    </Switch>
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between px-4 py-3 border-b bg-card">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto p-6 bg-background">
+            <div className="mx-auto max-w-7xl">
+              <Switch>
+                <Route path="/" component={Dashboard} />
+                <Route path="/customers" component={Customers} />
+                <Route path="/customers/new" component={NewCustomer} />
+                <Route path="/customers/:id" component={CustomerDetail} />
+                <Route path="/gold-prices" component={GoldPrices} />
+                <Route path="/loans" component={Loans} />
+                <Route path="/transactions/new" component={NewTransaction} />
+                <Route path="/vault" component={Vault} />
+                <Route path="/branches" component={Branches} />
+                <Route path="/renewals" component={Renewals} />
+                <Route component={NotFound} />
+              </Switch>
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -26,5 +79,3 @@ function App() {
     </QueryClientProvider>
   );
 }
-
-export default App;

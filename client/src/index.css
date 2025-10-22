@@ -60,9 +60,9 @@
 
   --muted-foreground: 0 0% 45%;
 
-  --accent: 45 15% 92%;
+  --accent: 45 65% 50%;
 
-  --accent-foreground: 45 15% 20%;
+  --accent-foreground: 0 0% 100%;
 
   --destructive: 0 70% 50%;
 
@@ -76,7 +76,7 @@
   --chart-4: 280 50% 50%;
   --chart-5: 35 70% 50%;
 
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: .5rem; /* 8px */
@@ -178,9 +178,9 @@
 
   --muted-foreground: 0 0% 65%;
 
-  --accent: 45 12% 18%;
+  --accent: 45 60% 60%;
 
-  --accent-foreground: 45 12% 90%;
+  --accent-foreground: 0 0% 10%;
 
   --destructive: 0 70% 50%;
 
