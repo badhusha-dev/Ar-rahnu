@@ -37,29 +37,29 @@ export const users = pgTable("users", {
   role: varchar("role", { enum: ["customer", "teller", "manager", "admin"] }).notNull().default("customer"),
   branchId: varchar("branch_id"),
   isActive: boolean("is_active").notNull().default(true),
-  
+
   // Email verification
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: varchar("email_verification_token", { length: 255 }),
   emailVerificationExpiry: timestamp("email_verification_expiry"),
-  
+
   // Password reset
   passwordResetToken: varchar("password_reset_token", { length: 255 }),
   passwordResetExpiry: timestamp("password_reset_expiry"),
-  
+
   // Two-Factor Authentication
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
   twoFactorSecret: varchar("two_factor_secret", { length: 255 }),
-  
+
   // Account security
   loginAttempts: integer("login_attempts").notNull().default(0),
   accountLockedUntil: timestamp("account_locked_until"),
-  
+
   // Last login tracking
   lastLoginAt: timestamp("last_login_at"),
   lastLoginIp: varchar("last_login_ip", { length: 100 }),
   lastLoginDevice: varchar("last_login_device", { length: 500 }),
-  
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -159,13 +159,13 @@ export const goldTransactions = pgTable("gold_transactions", {
   userId: varchar("user_id").notNull(),
   branchId: varchar("branch_id").notNull(),
   transactionNumber: varchar("transaction_number", { length: 100 }).notNull().unique(),
-  
+
   // Transaction details
   type: varchar("type", { enum: ["buy", "sell"] }).notNull(),
   grams: decimal("grams", { precision: 12, scale: 4 }).notNull(),
   ratePerGramMyr: decimal("rate_per_gram_myr", { precision: 10, scale: 2 }).notNull(),
   totalMyr: decimal("total_myr", { precision: 12, scale: 2 }).notNull(),
-  
+
   // Payment details
   paymentMethod: varchar("payment_method", { 
     enum: ["cash", "fpx", "duitnow", "card", "online"] 
@@ -174,21 +174,21 @@ export const goldTransactions = pgTable("gold_transactions", {
   paymentStatus: varchar("payment_status", { 
     enum: ["pending", "completed", "failed", "refunded"] 
   }).notNull().default("pending"),
-  
+
   // Status
   status: varchar("status", { 
     enum: ["pending", "completed", "cancelled"] 
   }).notNull().default("pending"),
-  
+
   // Contract document
   contractPdfUrl: varchar("contract_pdf_url", { length: 500 }),
   receiptPdfUrl: varchar("receipt_pdf_url", { length: 500 }),
-  
+
   // Audit
   processedBy: varchar("processed_by"),
   approvedBy: varchar("approved_by"),
   notes: text("notes"),
-  
+
   transactionDate: timestamp("transaction_date").notNull().defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -230,34 +230,34 @@ export const inventory = pgTable("inventory", {
     enum: ["bar", "coin", "jewelry", "wafer"] 
   }).notNull(),
   branchId: varchar("branch_id").notNull(),
-  
+
   // Gold details
   karat: varchar("karat", { enum: ["999", "916", "900", "875", "750", "585"] }).notNull(),
   weightGrams: decimal("weight_grams", { precision: 10, scale: 3 }).notNull(),
   description: text("description").notNull(),
-  
+
   // Pricing
   costPriceMyr: decimal("cost_price_myr", { precision: 12, scale: 2 }).notNull(),
   currentMarketValueMyr: decimal("current_market_value_myr", { precision: 12, scale: 2 }).notNull(),
-  
+
   // Tracking
   barcode: varchar("barcode", { length: 100 }).unique(),
   rfidTag: varchar("rfid_tag", { length: 100 }).unique(),
   location: varchar("location", { length: 100 }).notNull(),
-  
+
   // Status
   status: varchar("status", { 
     enum: ["available", "sold", "reserved", "damaged"] 
   }).notNull().default("available"),
-  
+
   // Supplier info
   supplierId: varchar("supplier_id"),
   purchaseDate: timestamp("purchase_date"),
-  
+
   // Media
   photoUrls: text("photo_urls").array(),
   certificateUrl: varchar("certificate_url", { length: 500 }),
-  
+
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -483,3 +483,23 @@ export const userRelations = relations(users, ({ one, many }) => ({
   refreshTokens: many(refreshTokens),
   loginHistory: many(loginHistory),
 }));
+
+// Add customer schema types
+export const insertCustomerSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  icNumber: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  country: z.string().default("Malaysia"),
+  role: z.enum(["customer", "teller", "manager", "admin"]).default("customer"),
+  branchId: z.string().min(1, "Branch is required"),
+  status: z.enum(["active", "inactive", "blacklisted"]).default("active"),
+});
+
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
