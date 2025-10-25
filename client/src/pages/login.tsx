@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { ToastContainer, toast as toastify } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Loader2, Mail, Lock, Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff, Moon, Sun, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
 const loginSchema = z.object({
@@ -26,12 +26,21 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>;
 
-const demoAccounts = [
-  { role: 'admin', email: 'admin@bse.my', password: 'Admin@123', label: 'Admin' },
-  { role: 'manager', email: 'manager@bse.my', password: 'Manager@123', label: 'Manager' },
-  { role: 'teller', email: 'teller@bse.my', password: 'Teller@123', label: 'Teller' },
-  { role: 'customer', email: 'customer@bse.my', password: 'Customer@123', label: 'Customer' },
-];
+interface DemoUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  scope: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface GroupedUsers {
+  rahnu: DemoUser[];
+  bse: DemoUser[];
+  both: DemoUser[];
+}
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -41,6 +50,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('');
+  const [demoUsers, setDemoUsers] = useState<GroupedUsers>({ rahnu: [], bse: [], both: [] });
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -52,20 +63,52 @@ export default function LoginPage() {
     },
   });
 
+  // Fetch demo users on mount
+  useEffect(() => {
+    async function fetchDemoUsers() {
+      try {
+        const response = await fetch('/api/auth/demo-users');
+        if (response.ok) {
+          const users = await response.json();
+          setDemoUsers(users);
+        }
+      } catch (error) {
+        console.error('Failed to fetch demo users:', error);
+      } finally {
+        setLoadingUsers(false);
+      }
+    }
+    fetchDemoUsers();
+  }, []);
+
+  // Password mapping for old BSE system
+  const getPasswordForUser = (email: string, role: string) => {
+    // Old system uses role-based passwords
+    const passwordMap: Record<string, string> = {
+      'admin': 'Admin@123',
+      'manager': 'Manager@123',
+      'teller': 'Teller@123',
+      'customer': 'Customer@123',
+    };
+    return passwordMap[role] || 'demo123';
+  };
+
   const handleRoleSelect = (role: string) => {
     setSelectedRole(role);
-    const account = demoAccounts.find(acc => acc.role === role);
-    if (account) {
-      form.setValue('email', account.email);
-      form.setValue('password', account.password);
+    // Find user across all groups
+    const allUsers = [...demoUsers.rahnu, ...demoUsers.bse, ...demoUsers.both];
+    const user = allUsers.find(u => u.role === role);
+    if (user) {
+      form.setValue('email', user.email);
+      form.setValue('password', getPasswordForUser(user.email, user.role));
     }
   };
 
-  const handleDemoAccountClick = (account: typeof demoAccounts[0]) => {
-    setSelectedRole(account.role);
-    form.setValue('email', account.email);
-    form.setValue('password', account.password);
-    toastify.info(`Demo credentials loaded for ${account.label}`, {
+  const handleDemoUserClick = (user: DemoUser) => {
+    setSelectedRole(user.role);
+    form.setValue('email', user.email);
+    form.setValue('password', getPasswordForUser(user.email, user.role));
+    toastify.info(`Demo credentials loaded for ${user.name}`, {
       position: 'top-right',
       autoClose: 2000,
     });
@@ -168,21 +211,49 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {/* Login As Selector */}
-              <div className="space-y-2">
-                <Label htmlFor="role">Login as</Label>
-                <Select value={selectedRole} onValueChange={handleRoleSelect}>
-                  <SelectTrigger id="role" data-testid="select-role">
-                    <SelectValue placeholder="Select role..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="teller">Teller</SelectItem>
-                    <SelectItem value="customer">Customer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Quick Role Selector */}
+              {(demoUsers.both.length > 0 || demoUsers.rahnu.length > 0 || demoUsers.bse.length > 0) && (
+                <div className="space-y-2">
+                  <Label htmlFor="role">Quick select user</Label>
+                  <Select value={selectedRole} onValueChange={handleRoleSelect}>
+                    <SelectTrigger id="role" data-testid="select-role">
+                      <SelectValue placeholder="Choose a demo user..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {demoUsers.both.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-purple-700 dark:text-purple-400">⚙️ Both Modules</div>
+                          {demoUsers.both.map((user) => (
+                            <SelectItem key={user.id} value={user.role}>
+                              {user.name} ({user.role})
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {demoUsers.rahnu.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-yellow-700 dark:text-yellow-400">🕌 Ar-Rahnu</div>
+                          {demoUsers.rahnu.map((user) => (
+                            <SelectItem key={user.id} value={user.role}>
+                              {user.name} ({user.role})
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                      {demoUsers.bse.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-green-700 dark:text-green-400">🪙 BSE</div>
+                          {demoUsers.bse.map((user) => (
+                            <SelectItem key={user.id} value={user.role}>
+                              {user.name} ({user.role})
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -271,24 +342,107 @@ export default function LoginPage() {
               className="mt-6 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg border border-blue-200 dark:border-gray-600"
             >
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">💡</span>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Demo Accounts</h3>
+                <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">⚡ Quick Demo Login</h3>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.role}
-                    type="button"
-                    onClick={() => handleDemoAccountClick(account)}
-                    className="p-2 text-left text-xs bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 hover:border-emerald-500 dark:hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer"
-                    data-testid={`button-demo-${account.role}`}
-                  >
-                    <div className="font-semibold text-emerald-700 dark:text-emerald-400">{account.label}</div>
-                    <div className="text-gray-600 dark:text-gray-400 truncate">{account.email}</div>
-                    <div className="text-gray-500 dark:text-gray-500">{account.password}</div>
-                  </button>
-                ))}
-              </div>
+              {loadingUsers ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                  <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Loading users...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Both Modules Group */}
+                  {demoUsers.both.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-xs font-semibold text-purple-700 dark:text-purple-400 mb-1 flex items-center gap-1">
+                        ⚙️ Both Modules
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {demoUsers.both.map((user) => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => handleDemoUserClick(user)}
+                            className="p-2 text-left text-xs bg-white dark:bg-gray-700 rounded border border-purple-200 dark:border-purple-600 hover:border-purple-500 dark:hover:border-purple-400 hover:shadow-md transition-all cursor-pointer group"
+                          >
+                            <div className="font-semibold text-purple-700 dark:text-purple-400 group-hover:text-purple-800 dark:group-hover:text-purple-300">
+                              {user.name}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400 truncate text-[10px]">{user.email}</div>
+                            <div className="text-gray-500 dark:text-gray-500 text-[10px] mt-1">
+                              <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded">
+                                {user.role}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ar-Rahnu Group */}
+                  {demoUsers.rahnu.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-xs font-semibold text-yellow-700 dark:text-yellow-400 mb-1 flex items-center gap-1">
+                        🕌 Ar-Rahnu Users
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {demoUsers.rahnu.map((user) => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => handleDemoUserClick(user)}
+                            className="p-2 text-left text-xs bg-white dark:bg-gray-700 rounded border border-yellow-200 dark:border-yellow-600 hover:border-yellow-500 dark:hover:border-yellow-400 hover:shadow-md transition-all cursor-pointer group"
+                          >
+                            <div className="font-semibold text-yellow-700 dark:text-yellow-400 group-hover:text-yellow-800 dark:group-hover:text-yellow-300">
+                              {user.name}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400 truncate text-[10px]">{user.email}</div>
+                            <div className="text-gray-500 dark:text-gray-500 text-[10px] mt-1">
+                              <span className="px-1.5 py-0.5 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded">
+                                {user.role}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BSE Group */}
+                  {demoUsers.bse.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1 flex items-center gap-1">
+                        🪙 BSE Users
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        {demoUsers.bse.map((user) => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => handleDemoUserClick(user)}
+                            className="p-2 text-left text-xs bg-white dark:bg-gray-700 rounded border border-green-200 dark:border-green-600 hover:border-green-500 dark:hover:border-green-400 hover:shadow-md transition-all cursor-pointer group"
+                          >
+                            <div className="font-semibold text-green-700 dark:text-green-400 group-hover:text-green-800 dark:group-hover:text-green-300">
+                              {user.name}
+                            </div>
+                            <div className="text-gray-600 dark:text-gray-400 truncate text-[10px]">{user.email}</div>
+                            <div className="text-gray-500 dark:text-gray-500 text-[10px] mt-1">
+                              <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
+                                {user.role}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-2 text-center">
+                Passwords: <span className="font-mono font-semibold">demo123</span> (new users) or role-based
+              </p>
             </motion.div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">

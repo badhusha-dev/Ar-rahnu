@@ -22,9 +22,12 @@ import {
   LogOut,
   User,
   Activity,
+  Settings,
+  Package,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuth as useAuthContext } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
@@ -94,15 +97,47 @@ const accountMenuItems = [
   },
 ];
 
+const masterDataMenuItems = [
+  {
+    title: "Branches",
+    url: "/master/branches",
+    icon: Building2,
+    roles: ["manager", "admin"],
+  },
+  {
+    title: "Gold Prices",
+    url: "/master/gold-prices",
+    icon: TrendingUp,
+    roles: ["manager", "admin"],
+  },
+  {
+    title: "Suppliers",
+    url: "/master/suppliers",
+    icon: Package,
+    roles: ["manager", "admin"],
+  },
+  {
+    title: "Users",
+    url: "/master/users",
+    icon: Users,
+    roles: ["admin"],
+  },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { logout } = useAuthContext();
 
   const filteredItems = menuItems.filter((item) =>
     item.roles.includes(user?.role || "teller")
   );
 
   const filteredAccountItems = accountMenuItems.filter((item) =>
+    item.roles.includes(user?.role || "teller")
+  );
+
+  const filteredMasterDataItems = masterDataMenuItems.filter((item) =>
     item.roles.includes(user?.role || "teller")
   );
 
@@ -164,6 +199,26 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {filteredMasterDataItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Master Data</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {filteredMasterDataItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link href={item.url}>
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t">
@@ -183,11 +238,15 @@ export function AppSidebar() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" asChild className="w-full" data-testid="button-logout">
-          <a href="/api/logout">
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </a>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="w-full" 
+          data-testid="button-logout"
+          onClick={logout}
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Sign Out
         </Button>
       </SidebarFooter>
     </Sidebar>

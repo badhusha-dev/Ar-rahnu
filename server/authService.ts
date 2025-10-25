@@ -216,14 +216,38 @@ export class AuthService {
     return { accessToken, refreshToken: newRefreshToken };
   }
 
-  async logout(userId: string, refreshToken?: string): Promise<{ message: string }> {
+  async logout(userId: string, refreshToken?: string, req?: any): Promise<{ message: string }> {
+    // Record logout history
+    try {
+      await storage.createLogoutHistory({
+        userId,
+        ipAddress: req?.ip || req?.connection?.remoteAddress,
+        userAgent: req?.get?.('user-agent'),
+        device: req?.get?.('user-agent')?.includes('Mobile') ? 'Mobile' : 'Desktop',
+      });
+    } catch (error) {
+      console.error('Failed to record logout history:', error);
+    }
+
     if (refreshToken) {
       await storage.deleteRefreshToken(refreshToken);
     }
     return { message: 'Logged out successfully' };
   }
 
-  async logoutAllSessions(userId: string): Promise<{ message: string }> {
+  async logoutAllSessions(userId: string, req?: any): Promise<{ message: string }> {
+    // Record logout history
+    try {
+      await storage.createLogoutHistory({
+        userId,
+        ipAddress: req?.ip || req?.connection?.remoteAddress,
+        userAgent: req?.get?.('user-agent'),
+        device: req?.get?.('user-agent')?.includes('Mobile') ? 'Mobile' : 'Desktop',
+      });
+    } catch (error) {
+      console.error('Failed to record logout history:', error);
+    }
+
     await storage.deleteUserRefreshTokens(userId);
     return { message: 'Logged out from all sessions' };
   }

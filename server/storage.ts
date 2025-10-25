@@ -9,6 +9,7 @@ import {
   branches,
   refreshTokens,
   loginHistory,
+  logoutHistory,
   auditLogs,
   type User,
   type UpsertUser,
@@ -31,6 +32,8 @@ import {
   type InsertRefreshToken,
   type LoginHistory,
   type InsertLoginHistory,
+  type LogoutHistory,
+  type InsertLogoutHistory,
   type AuditLog,
   type InsertAuditLog,
 } from "@shared/schema";
@@ -47,6 +50,7 @@ export interface IStorage {
   updateUser(id: string, data: Partial<User>): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getUsers(): Promise<User[]>;
+  getDemoUsers(): Promise<Array<{ id: string; firstName: string; lastName: string; email: string; role: string }>>;
   
   // Refresh token operations
   createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken>;
@@ -59,6 +63,10 @@ export interface IStorage {
   // Login history operations
   createLoginHistory(history: InsertLoginHistory): Promise<LoginHistory>;
   getUserLoginHistory(userId: string, limit?: number): Promise<LoginHistory[]>;
+  
+  // Logout history operations
+  createLogoutHistory(history: InsertLogoutHistory): Promise<LogoutHistory>;
+  getUserLogoutHistory(userId: string, limit?: number): Promise<LogoutHistory[]>;
   
   // Branch operations
   getBranches(): Promise<Branch[]>;
@@ -164,6 +172,36 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
+  async getDemoUsers() {
+    const allUsers = await db.select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      email: users.email,
+      role: users.role,
+      scope: users.scope,
+    }).from(users).orderBy(users.scope, users.role, users.firstName);
+    
+    const formatted = allUsers.map(user => ({
+      id: user.id,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email,
+      role: user.role,
+      scope: user.scope || 'bse',
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email.split('@')[0],
+    }));
+
+    // Group by scope
+    const grouped = {
+      rahnu: formatted.filter(u => u.scope === 'rahnu'),
+      bse: formatted.filter(u => u.scope === 'bse'),
+      both: formatted.filter(u => u.scope === 'both' || u.role === 'admin'),
+    };
+
+    return grouped;
+  }
+
   // Refresh token operations
   async createRefreshToken(token: InsertRefreshToken): Promise<RefreshToken> {
     const [created] = await db.insert(refreshTokens).values(token).returning();
@@ -211,6 +249,21 @@ export class DatabaseStorage implements IStorage {
       .from(loginHistory)
       .where(eq(loginHistory.userId, userId))
       .orderBy(desc(loginHistory.loginAt))
+      .limit(limit);
+  }
+
+  // Logout history operations
+  async createLogoutHistory(history: InsertLogoutHistory): Promise<LogoutHistory> {
+    const [created] = await db.insert(logoutHistory).values(history).returning();
+    return created;
+  }
+
+  async getUserLogoutHistory(userId: string, limit: number = 20): Promise<LogoutHistory[]> {
+    return await db
+      .select()
+      .from(logoutHistory)
+      .where(eq(logoutHistory.userId, userId))
+      .orderBy(desc(logoutHistory.logoutAt))
       .limit(limit);
   }
 

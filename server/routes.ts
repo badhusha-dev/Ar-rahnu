@@ -17,6 +17,7 @@ import {
 } from "@shared/schema";
 import axios from "axios";
 import { z } from "zod";
+import masterRoutes from "./routes/master";
 
 // Helper to generate transaction number
 function generateTransactionNumber(): string {
@@ -160,6 +161,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get demo users for quick login (development/demo only)
+  app.get('/api/auth/demo-users', async (req, res) => {
+    try {
+      const demoUsers = await storage.getDemoUsers();
+      res.json(demoUsers);
+    } catch (error: any) {
+      res.status(500).json({ message: 'Failed to fetch demo users' });
+    }
+  });
+
   app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
     try {
       const loginData = loginSchema.parse(req.body);
@@ -210,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/auth/logout', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
-      const result = await authService.logout(req.user!.userId, refreshToken);
+      const result = await authService.logout(req.user!.userId, refreshToken, req);
       res.clearCookie('refreshToken');
       res.json(result);
     } catch (error: any) {
@@ -220,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/logout-all', authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
-      const result = await authService.logoutAllSessions(req.user!.userId);
+      const result = await authService.logoutAllSessions(req.user!.userId, req);
       res.clearCookie('refreshToken');
       res.json(result);
     } catch (error: any) {
@@ -754,6 +765,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch audit logs" });
     }
   });
+
+  // ============================================
+  // MASTER DATA ROUTES
+  // ============================================
+  app.use('/api/master', masterRoutes);
 
   const httpServer = createServer(app);
   return httpServer;

@@ -5,8 +5,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ModuleNav } from "@/components/ModuleNav";
+import { QuickActions } from "@/components/QuickActions";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import LoginPage from "@/pages/login";
 import RegisterPage from "@/pages/register";
 import ForgotPasswordPage from "@/pages/forgot-password";
@@ -29,6 +32,10 @@ import NewTransaction from "@/pages/new-transaction";
 import Vault from "@/pages/vault";
 import Branches from "@/pages/branches";
 import Renewals from "@/pages/renewals";
+import BranchesMaster from "@/pages/master/branches";
+import GoldPricesMaster from "@/pages/master/gold-prices";
+import SuppliersMaster from "@/pages/master/suppliers";
+import UsersMaster from "@/pages/master/users";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -93,6 +100,10 @@ function Router() {
                 <Route path="/vault" component={Vault} />
                 <Route path="/branches" component={Branches} />
                 <Route path="/renewals" component={Renewals} />
+                <Route path="/master/branches" component={BranchesMaster} />
+                <Route path="/master/gold-prices" component={GoldPricesMaster} />
+                <Route path="/master/suppliers" component={SuppliersMaster} />
+                <Route path="/master/users" component={UsersMaster} />
                 <Route component={NotFound} />
               </Switch>
             </div>
@@ -106,12 +117,14 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

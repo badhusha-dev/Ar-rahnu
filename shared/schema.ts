@@ -35,6 +35,7 @@ export const users = pgTable("users", {
   phone: varchar("phone", { length: 50 }),
   profileImageUrl: varchar("profile_image_url", { length: 500 }),
   role: varchar("role", { enum: ["customer", "teller", "manager", "admin"] }).notNull().default("customer"),
+  scope: varchar("scope", { enum: ["rahnu", "bse", "both"] }).notNull().default("bse"),
   branchId: varchar("branch_id"),
   isActive: boolean("is_active").notNull().default(true),
 
@@ -440,6 +441,32 @@ export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
 
 export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
 export type LoginHistory = typeof loginHistory.$inferSelect;
+
+// Logout History table (logout tracking and audit)
+export const logoutHistory = pgTable("logout_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  logoutAt: timestamp("logout_at").notNull().defaultNow(),
+  ipAddress: varchar("ip_address", { length: 100 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  device: varchar("device", { length: 255 }),
+  sessionDuration: integer("session_duration"), // Duration in seconds
+});
+
+export const logoutHistoryRelations = relations(logoutHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [logoutHistory.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertLogoutHistorySchema = createInsertSchema(logoutHistory).omit({
+  id: true,
+  logoutAt: true,
+});
+
+export type InsertLogoutHistory = z.infer<typeof insertLogoutHistorySchema>;
+export type LogoutHistory = typeof logoutHistory.$inferSelect;
 
 // Audit Logs table (system-wide activity tracking)
 export const auditLogs = pgTable("audit_logs", {
